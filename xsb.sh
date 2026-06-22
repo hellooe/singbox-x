@@ -123,7 +123,7 @@ install_singbox() {
     LATEST=$(curl -s --max-time 5 https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | head -1 | awk -F '"' '{print $4}' | sed 's/v//')
     if [[ -z "$LATEST" ]]; then
         echo -e "${YELLOW}获取最新版本失败，使用默认 1.10.6${PLAIN}"
-        LATEST="1.10.6"
+        LATEST="1.13.12"
     fi
     DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LATEST}/sing-box-${LATEST}-linux-${ARCH}.tar.gz"
     wget -O /tmp/sing-box.tar.gz "$DOWNLOAD_URL" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
@@ -300,10 +300,11 @@ add_inbound() {
     echo "2) AnyReality"
     echo "3) AnyTLS"
     echo "4) Hysteria2"
-    echo "5) VMess+WS (with TLS)"
-    read -p "选择 [1-5]: " proto
+    echo "5) VMess+WSS"
+    echo "6) Shadowsocks 2022"
+    read -p "选择 [1-6]: " proto
     case $proto in
-        1|2|3|4|5) ;;
+        1|2|3|4|5|6) ;;
         *) echo -e "${RED}无效${PLAIN}" && return 1 ;;
     esac
 
@@ -528,6 +529,32 @@ add_inbound() {
                         key_path: $key_path
                     }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
+            ;;
+        6) # Shadowsocks 2022
+            echo "选择加密方法:"
+            echo "1) 2022-blake3-aes-128-gcm"
+            echo "2) 2022-blake3-aes-256-gcm"
+            echo "3) 2022-blake3-chacha20-poly1305"
+            read -p "选择 [1-3]: " ss_method_choice
+            case $ss_method_choice in
+                1) method="2022-blake3-aes-128-gcm"; bytes=16 ;;
+                2) method="2022-blake3-aes-256-gcm"; bytes=32 ;;
+                3) method="2022-blake3-chacha20-poly1305"; bytes=32 ;;
+                *) echo -e "${YELLOW}无效选择，使用默认 256-gcm${PLAIN}"; method="2022-blake3-aes-256-gcm"; bytes=32 ;;
+            esac
+            password=$(openssl rand -base64 $bytes | tr -d '\n')
+            read -p "网络类型 (tcp/udp/both，默认 both): " network
+            network=${network:-"tcp,udp"}
+            jq -n \
+                --arg type "shadowsocks" \
+                --arg tag "$tag" \
+                --arg listen "::" \
+                --argjson port "$PORT" \
+                --arg method "$method" \
+                --arg password "$password" \
+                --arg network "$network" \
+                '{type: $type, tag: $tag, listen: $listen, listen_port: $port, method: $method, password: $password, network: $network}' \
+                > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
     esac
     echo -e "${GREEN}入站 $tag 添加成功 (端口 $PORT)${PLAIN}"
@@ -1263,10 +1290,10 @@ show_info() {
                     PUBLIC_KEY=""
                 fi
                 if [[ -n "$ipv4" ]]; then
-                    echo "vless://$UUID@$ipv4:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp"
+                    echo "vless://$UUID@$ipv4:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                 fi
                 if [[ -n "$ipv6" ]]; then
-                    echo "vless://$UUID@[$ipv6]:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp"
+                    echo "vless://$UUID@[$ipv6]:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                 fi
                 ;;
             anytls)
@@ -1280,17 +1307,17 @@ show_info() {
                         PUBLIC_KEY=""
                     fi
                     if [[ -n "$ipv4" ]]; then
-                        echo "anytls://$UUID@$ipv4:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp"
+                        echo "anytls://$UUID@$ipv4:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                     fi
                     if [[ -n "$ipv6" ]]; then
-                        echo "anytls://$UUID@[$ipv6]:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp"
+                        echo "anytls://$UUID@[$ipv6]:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                     fi
                 else
                     if [[ -n "$ipv4" ]]; then
-                        echo "anytls://$UUID@$ipv4:$port?security=tls&sni=$sni&insecure=0&type=tcp"
+                        echo "anytls://$UUID@$ipv4:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
                     fi
                     if [[ -n "$ipv6" ]]; then
-                        echo "anytls://$UUID@[$ipv6]:$port?security=tls&sni=$sni&insecure=0&type=tcp"
+                        echo "anytls://$UUID@[$ipv6]:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
                     fi
                 fi
                 ;;
@@ -1301,10 +1328,10 @@ show_info() {
                     hop_range=$(cat "$hop_file")
                 fi
                 if [[ -n "$ipv4" ]]; then
-                    echo "hysteria2://$UUID@$ipv4:$port?sni=$sni&insecure=0&mport=$hop_range"
+                    echo "hysteria2://$UUID@$ipv4:$port?sni=$sni&insecure=0&mport=$hop_range#$tag"
                 fi
                 if [[ -n "$ipv6" ]]; then
-                    echo "hysteria2://$UUID@[$ipv6]:$port?sni=$sni&insecure=0&mport=$hop_range"
+                    echo "hysteria2://$UUID@[$ipv6]:$port?sni=$sni&insecure=0&mport=$hop_range#$tag"
                 fi
                 ;;
             vmess)
@@ -1317,6 +1344,18 @@ show_info() {
                 if [[ -n "$ipv6" ]]; then
                     vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"[$ipv6]\",\"port\":\"$port\",\"id\":\"$UUID\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
                     echo "vmess://$(echo -n "$vmess_json" | openssl base64 -A 2>/dev/null)"
+                fi
+                ;;
+            shadowsocks)
+                method=$(jq -r '.method' "$f")
+                password=$(jq -r '.password' "$f")
+                ss_userinfo=$(echo -n "$method:$password" | openssl base64 -A 2>/dev/null)
+                tag_b64=$(echo -n "$tag" | openssl base64 -A 2>/dev/null)
+                if [[ -n "$ipv4" ]]; then
+                    echo "ss://$ss_userinfo@$ipv4:$port#$tag_b64"
+                fi
+                if [[ -n "$ipv6" ]]; then
+                    echo "ss://$ss_userinfo@[$ipv6]:$port#$tag_b64"
                 fi
                 ;;
         esac
