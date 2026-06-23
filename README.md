@@ -12,7 +12,7 @@
 
 - 安装 / 更新 / 卸载 Sing-box
 - 多域名 ACME 证书管理（HTTP-01 / DNS-01）
-- 多种入站协议（VLESS+Reality、AnyTLS+Reality、AnyTLS+TLS、Hysteria2、VMess+WS+TLS）
+- 多种入站协议（VLESS+Reality、AnyTLS+Reality、AnyTLS+TLS、Hysteria2、VMess+WS+TLS、 SS2022）
 - 出站代理（SOCKS5、WARP）
 - Hysteria2 端口跳跃（基于 iptables）
 - TCP 内核参数智能调优（基于测速结果）
@@ -34,7 +34,7 @@
 ## 📦 安装与运行
 
 ```bash
-wget -O xsb.sh https://github.com/hellooe/singbox-x/blob/master/xsb.sh
+wget -O xsb.sh https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh
 chmod +x xsb.sh
 ./xsb.sh
 ```
