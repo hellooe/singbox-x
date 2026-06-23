@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sing-box 部署命令生成器 (xsb)</title>
+<style>
+:root {
+    --bg: #0b1020;
+    --card: #121831;
+    --ink: #e9edf7;
+    --sub: #b7c1d9;
+    --line: #263255;
+    --acc: #4f7cff;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --input-bg: #0d1430;
+    --button-bg-dark: #1a2346;
+    --button-bg-light: #121a39;
+    --body-bg: linear-gradient(180deg, var(--bg) 0%, #0e1530 100%);
+    --radius: 10px;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.light-mode {
+    --bg: #ffffff;
+    --card: #ffffff;
+    --ink: #1a202c;
+    --sub: #4a5568;
+    --line: #e2e8f0;
+    --acc: #4f7cff;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --input-bg: #ffffff;
+    --button-bg-dark: #e2e8f0;
+    --button-bg-light: #f0f4f9;
+    --body-bg: var(--bg);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    margin: 0;
+    background: var(--body-bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+}
+a { color: var(--acc); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1400px; margin: 0 auto; }
+
+header {
+    text-align: center;
+    margin-bottom: 24px;
+    position: relative;
+}
+header h1 {
+    font-size: 28px;
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, var(--acc), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+}
+header .repo-link {
+    font-size: 14px;
+    color: var(--sub);
+    margin-top: 2px;
+}
+header .repo-link a { color: var(--acc); }
+header .sub-desc {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--sub);
+}
+#themeToggle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    background: var(--button-bg-dark);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.2s;
+}
+#themeToggle:hover { background: var(--button-bg-light); }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+.card h2 {
+    font-size: 18px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+}
+.card .hint {
+    font-size: 13px;
+    color: var(--sub);
+    margin: -6px 0 12px 0;
+}
+
+.entry-list { margin-top: 12px; }
+.entry-item {
+    background: var(--input-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+}
+.entry-item .row {
+    flex: 1 1 180px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+}
+.entry-item .row label {
+    font-size: 13px;
+    color: var(--sub);
+    min-width: 60px;
+}
+.entry-item .row input,
+.entry-item .row select {
+    flex: 1;
+    min-width: 80px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 13px;
+}
+.entry-item .row input:focus,
+.entry-item .row select:focus {
+    border-color: var(--acc);
+    outline: none;
+}
+.entry-item .del-btn {
+    background: transparent;
+    border: none;
+    color: var(--err);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.entry-item .del-btn:hover { opacity: 1; }
+.add-btn {
+    background: var(--button-bg-dark);
+    border: 1px dashed var(--line);
+    color: var(--sub);
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s, border 0.2s;
+    margin-top: 4px;
+}
+.add-btn:hover {
+    background: var(--button-bg-light);
+    border-color: var(--acc);
+    color: var(--ink);
+}
+
+.global-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 30px;
+    align-items: center;
+}
+.global-row .field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.global-row .field label {
+    color: var(--sub);
+    font-size: 14px;
+    min-width: 70px;
+}
+.global-row .field input {
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--ink);
+    font-size: 14px;
+    width: 220px;
+}
+.global-row .field input:focus {
+    border-color: var(--acc);
+    outline: none;
+}
+
+.output-area textarea {
+    width: 100%;
+    min-height: 200px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--ink);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    resize: vertical;
+    tab-size: 2;
+}
+.output-area textarea:focus {
+    outline: none;
+    border-color: var(--acc);
+}
+.output-area .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+.output-area .actions button {
+    padding: 8px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--button-bg-dark);
+    color: var(--ink);
+}
+.output-area .actions button:hover { background: var(--button-bg-light); }
+.output-area .actions button.primary {
+    background: var(--acc);
+    color: #fff;
+}
+.output-area .actions button.primary:hover { opacity: 0.85; }
+.output-area .actions button:active { transform: scale(0.97); }
+.output-area .copy-feedback {
+    font-size: 13px;
+    color: var(--ok);
+    margin-left: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.output-area .copy-feedback.show { opacity: 1; }
+
+footer {
+    text-align: center;
+    color: var(--sub);
+    font-size: 14px;
+    padding: 20px 0 10px;
+    border-top: 1px solid var(--line);
+    margin-top: 20px;
+}
+footer a { color: var(--acc); }
+
+.socks-row-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    flex: 1 1 100%;
+}
+.socks-row-group .row {
+    flex: 1 1 200px;
+}
+
+.extra-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    margin: 8px 0 4px 0;
+}
+.extra-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--sub);
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+    <h1>🚀 Sing-box 部署命令生成器 (xsb)</h1>
+    <div class="repo-link">
+        <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
+    </div>
+    <div class="sub-desc">添加证书、入站、出站、Cloudflare 配置 → 生成命令列表 → 复制执行</div>
+    <button id="themeToggle">🌙 暗色</button>
+</header>
+
+<!-- 全局 Cloudflare 凭证 -->
+<div class="card">
+    <h2>🔑 全局 Cloudflare 凭证</h2>
+    <div class="global-row">
+        <div class="field">
+            <label>CF_Key</label>
+            <input id="globalCfKey" type="text" placeholder="Cloudflare API Key" />
+        </div>
+        <div class="field">
+            <label>CF_Email</label>
+            <input id="globalCfEmail" type="text" placeholder="Cloudflare Email" />
+        </div>
+    </div>
+    <div style="font-size:12px;color:var(--sub);margin-top:6px;">用于 DNS‑01 证书验证、DNS 记录、Origin Rule 和 Argo 隧道。</div>
+</div>
+
+<!-- 证书 -->
+<div class="card" id="certModule">
+    <h2>🔐 证书</h2>
+    <div id="certList" class="entry-list"></div>
+    <button class="add-btn" data-type="cert">➕ 添加证书</button>
+</div>
+
+<!-- 入站 -->
+<div class="card" id="inboundModule">
+    <h2>📥 入站</h2>
+    <div id="inboundList" class="entry-list"></div>
+    <button class="add-btn" data-type="inbound">➕ 添加入站</button>
+</div>
+
+<!-- 出站 -->
+<div class="card" id="outboundModule">
+    <h2>📤 出站</h2>
+    <div id="outboundList" class="entry-list"></div>
+    <button class="add-btn" data-type="outbound">➕ 添加出站</button>
+</div>
+
+<!-- Cloudflare 拆分三个卡片 -->
+<!-- DNS 记录 -->
+<div class="card" id="cfDnsModule">
+    <h2>☁️ DNS 记录</h2>
+    <div id="cfDnsList" class="entry-list"></div>
+    <button class="add-btn" data-type="cf_dns">➕ 添加 DNS 记录</button>
+</div>
+
+<!-- Origin Rule -->
+<div class="card" id="cfOriginRuleModule">
+    <h2>☁️ Origin Rule</h2>
+    <div id="cfOriginRuleList" class="entry-list"></div>
+    <button class="add-btn" data-type="cf_origin_rule">➕ 添加 Origin Rule</button>
+</div>
+
+<!-- Argo -->
+<div class="card" id="cfArgoModule">
+    <h2>☁️ Argo 隧道</h2>
+    <div id="cfArgoList" class="entry-list"></div>
+    <button class="add-btn" data-type="cf_argo">➕ 添加 Argo 隧道</button>
+</div>
+
+<!-- 输出 -->
+<div class="card output-area">
+    <h2>📋 生成的命令列表</h2>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+        <span style="color:var(--sub);font-size:14px;">命令类型：</span>
+        <label><input type="radio" name="cmdTypeOut" value="curl" checked /> curl</label>
+        <label><input type="radio" name="cmdTypeOut" value="wget" /> wget</label>
+        <button id="btnGenerate" class="primary" style="margin-left:auto;padding:6px 20px;border:none;border-radius:6px;background:var(--acc);color:#fff;cursor:pointer;font-size:14px;">🔄 生成命令</button>
+    </div>
+    <div class="extra-options">
+        <label><input type="checkbox" id="includeTune" /> 包含 TCP 调优 (tune)</label>
+        <label><input type="checkbox" id="includeInstall" checked /> 自动包含 install (首次部署必需)</label>
+    </div>
+    <textarea id="outputCmd" spellcheck="false" readonly></textarea>
+    <div class="actions">
+        <button id="btnCopy">📋 复制全部</button>
+        <button id="btnReset">↺ 清空所有条目</button>
+        <span id="copyFeedback" class="copy-feedback">✅ 已复制</span>
+    </div>
+    <div style="font-size:12px;color:var(--sub);margin-top:8px;">
+        💡 每条命令对应一个配置条目，复制全部后在服务器（root）顺序执行。<br>
+        ⚠️ 首次部署必须包含 <strong>install</strong>（已自动添加），用于安装依赖和 Sing-box。<br>
+        📌 单独执行入站/出站配置后，会自动构建并重启服务。
+    </div>
+</div>
+
+<footer>
+    <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
+    &nbsp;·&nbsp; 如果对您有帮助，请点个 Star ⭐ 欢迎反馈 Issues
+</footer>
+
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    const SCRIPT_URL = 'https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh';
+
+    let entries = {
+        cert: [],
+        inbound: [],
+        outbound: [],
+        cf_dns: [],
+        cf_origin_rule: [],
+        cf_argo: []
+    };
+
+    const globalCfKey = document.getElementById('globalCfKey');
+    const globalCfEmail = document.getElementById('globalCfEmail');
+    const outputCmd = document.getElementById('outputCmd');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const btnCopy = document.getElementById('btnCopy');
+    const btnReset = document.getElementById('btnReset');
+    const copyFeedback = document.getElementById('copyFeedback');
+    const themeToggle = document.getElementById('themeToggle');
+    const cmdTypeRadios = document.querySelectorAll('input[name="cmdTypeOut"]');
+    const includeTune = document.getElementById('includeTune');
+    const includeInstall = document.getElementById('includeInstall');
+
+    function applyTheme(isLight) {
+        document.body.classList.toggle('light-mode', isLight);
+        themeToggle.textContent = isLight ? '☀️ 亮色' : '🌙 暗色';
+        localStorage.setItem('xsb_theme', isLight ? 'light' : 'dark');
+    }
+
+    function initTheme() {
+        const isLight = localStorage.getItem('xsb_theme') === 'light';
+        applyTheme(isLight);
+    }
+
+    themeToggle.addEventListener('click', function() {
+        const isLight = !document.body.classList.contains('light-mode');
+        applyTheme(isLight);
+    });
+
+    function escHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderAll() {
+        renderList('cert', 'certList', renderCertEntry);
+        renderList('inbound', 'inboundList', renderInboundEntry);
+        renderList('outbound', 'outboundList', renderOutboundEntry);
+        renderList('cf_dns', 'cfDnsList', renderCfDnsEntry);
+        renderList('cf_origin_rule', 'cfOriginRuleList', renderCfOriginRuleEntry);
+        renderList('cf_argo', 'cfArgoList', renderCfArgoEntry);
+        bindDynamicSelects();
+    }
+
+    function renderList(type, containerId, renderFn) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const items = entries[type] || [];
+        container.innerHTML = items.map((item, index) => renderFn(item, index, type)).join('');
+    }
+
+    function renderCertEntry(item, idx, type) {
+        const showWebPort = (item.acme_mode == 1);
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
+                <div class="row"><label>验证方式</label>
+                    <select data-field="acme_mode" class="dynamic-select">
+                        <option value="1" ${item.acme_mode == 1 ? 'selected' : ''}>HTTP-01</option>
+                        <option value="2" ${item.acme_mode == 2 ? 'selected' : ''}>DNS-01</option>
+                    </select>
+                </div>
+                ${showWebPort ? `<div class="row"><label>HTTP端口</label><input type="text" value="${escHtml(item.web_port || '80')}" placeholder="80" data-field="web_port" /></div>` : ''}
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function renderInboundEntry(item, idx, type) {
+        const protocol = parseInt(item.inbound_type, 10);
+        let credLabel = 'UUID';
+        if ([2,3,4,6].includes(protocol)) credLabel = 'PASSWORD';
+        const showReality = (protocol === 1 || protocol === 2);
+        const showTlsCert = (protocol === 3 || protocol === 4 || protocol === 5);
+        const showWs = (protocol === 5);
+        const showSs = (protocol === 6);
+        const showHy2 = (protocol === 4);
+        const showHop = (showHy2 && item.enable_hop === 'y');
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>协议</label>
+                    <select data-field="inbound_type" class="dynamic-select">
+                        <option value="1" ${protocol == 1 ? 'selected' : ''}>VLESS+Reality</option>
+                        <option value="2" ${protocol == 2 ? 'selected' : ''}>AnyTLS+Reality</option>
+                        <option value="3" ${protocol == 3 ? 'selected' : ''}>AnyTLS+TLS</option>
+                        <option value="4" ${protocol == 4 ? 'selected' : ''}>Hysteria2</option>
+                        <option value="5" ${protocol == 5 ? 'selected' : ''}>VMess+WSS</option>
+                        <option value="6" ${protocol == 6 ? 'selected' : ''}>Shadowsocks</option>
+                    </select>
+                </div>
+                <div class="row"><label>端口</label><input type="text" value="${escHtml(item.port || '0')}" placeholder="0=随机" data-field="port" /></div>
+                <div class="row"><label>${credLabel}</label><input type="text" value="${escHtml(item.uuid || '')}" placeholder="留空自动生成" data-field="uuid" /></div>
+                ${showReality ? `<div class="row"><label>伪装域名</label><input type="text" value="${escHtml(item.reality_sni || '')}" placeholder="www.apple.com" data-field="reality_sni" /></div>` : ''}
+                ${showTlsCert ? `<div class="row"><label>证书域名</label><input type="text" value="${escHtml(item.cert_domain || '')}" placeholder="已申请证书的域名" data-field="cert_domain" /></div>` : ''}
+                ${showWs ? `<div class="row"><label>WS路径</label><input type="text" value="${escHtml(item.ws_path || '')}" placeholder="/vm-xxx" data-field="ws_path" /></div>` : ''}
+                ${showSs ? `<div class="row"><label>加密方法</label>
+                    <select data-field="ss_method">
+                        <option value="1" ${item.ss_method == 1 ? 'selected' : ''}>aes-128-gcm</option>
+                        <option value="2" ${item.ss_method == 2 ? 'selected' : ''}>aes-256-gcm</option>
+                        <option value="3" ${item.ss_method == 3 ? 'selected' : ''}>chacha20-poly1305</option>
+                    </select>
+                </div>` : ''}
+                ${showHy2 ? `
+                    <div class="row"><label>端口跳跃</label>
+                        <select data-field="enable_hop" class="dynamic-select">
+                            <option value="n" ${item.enable_hop != 'y' ? 'selected' : ''}>否</option>
+                            <option value="y" ${item.enable_hop == 'y' ? 'selected' : ''}>是</option>
+                        </select>
+                    </div>
+                    ${showHop ? `<div class="row" style="flex:1 1 100%;"><label>跳跃范围</label><input type="text" value="${escHtml(item.hop_start || '60000')}" placeholder="起始" data-field="hop_start" style="flex:1;min-width:60px;" /> — <input type="text" value="${escHtml(item.hop_end || '65000')}" placeholder="结束" data-field="hop_end" style="flex:1;min-width:60px;" /></div>` : ''}
+                ` : ''}
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function renderOutboundEntry(item, idx, type) {
+        const isSocks = (item.outbound_type == 1);
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>类型</label>
+                    <select data-field="outbound_type" class="dynamic-select">
+                        <option value="1" ${item.outbound_type == 1 ? 'selected' : ''}>SOCKS5</option>
+                        <option value="2" ${item.outbound_type == 2 ? 'selected' : ''}>WARP</option>
+                    </select>
+                </div>
+                ${isSocks ? `
+                    <div class="socks-row-group">
+                        <div class="row"><label>服务器</label><input type="text" value="${escHtml(item.socks_server || '127.0.0.1')}" placeholder="127.0.0.1" data-field="socks_server" style="flex:1;" /></div>
+                        <div class="row"><label>端口</label><input type="text" value="${escHtml(item.socks_port || '1080')}" placeholder="1080" data-field="socks_port" style="flex:1;" /></div>
+                    </div>
+                    <div class="socks-row-group">
+                        <div class="row"><label>用户名</label><input type="text" value="${escHtml(item.socks_user || '')}" placeholder="可选" data-field="socks_user" style="flex:1;" /></div>
+                        <div class="row"><label>密码</label><input type="text" value="${escHtml(item.socks_pass || '')}" placeholder="可选" data-field="socks_pass" style="flex:1;" /></div>
+                    </div>
+                ` : ''}
+                <div class="row"><label>路由匹配</label><input type="text" value="${escHtml(item.outbound_match || '{"ip_cidr":["0.0.0.0/0","::/0"]}')}" placeholder='{"ip_cidr":["0.0.0.0/0","::/0"]}' data-field="outbound_match" style="flex:2;" /></div>
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function renderCfDnsEntry(item, idx, type) {
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
+                <div class="row"><label>Zone ID</label><input type="text" value="${escHtml(item.zone_id)}" placeholder="Zone ID" data-field="zone_id" /></div>
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function renderCfOriginRuleEntry(item, idx, type) {
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
+                <div class="row"><label>Zone ID</label><input type="text" value="${escHtml(item.zone_id)}" placeholder="Zone ID" data-field="zone_id" /></div>
+                <div class="row"><label>WS路径</label><input type="text" value="${escHtml(item.ws_path)}" placeholder="/vm-xxx" data-field="ws_path" /></div>
+                <div class="row"><label>目标端口</label><input type="text" value="${escHtml(item.port)}" placeholder="入站端口" data-field="port" /></div>
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function renderCfArgoEntry(item, idx, type) {
+        return `
+            <div class="entry-item" data-type="${type}" data-idx="${idx}">
+                <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
+                <div class="row"><label>Argo Token</label><input type="text" value="${escHtml(item.argo_token)}" placeholder="ey 开头的 Token" data-field="argo_token" style="flex:2;" /></div>
+                <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
+            </div>
+        `;
+    }
+
+    function bindDynamicSelects() {
+        document.querySelectorAll('.dynamic-select').forEach(sel => {
+            sel.removeEventListener('change', handleDynamicChange);
+            sel.addEventListener('change', handleDynamicChange);
+        });
+    }
+
+    function handleDynamicChange(e) {
+        syncDataFromDOM();
+        renderAll();
+        generateCommands();
+    }
+
+    document.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target.classList.contains('add-btn')) {
+            const type = target.dataset.type;
+            if (!type) return;
+            addEntry(type);
+            return;
+        }
+        if (target.classList.contains('del-btn')) {
+            const type = target.dataset.type;
+            const idx = parseInt(target.dataset.idx, 10);
+            if (type === undefined || isNaN(idx)) return;
+            removeEntry(type, idx);
+            return;
+        }
+    });
+
+    function addEntry(type) {
+        let defaultItem = {};
+        switch(type) {
+            case 'cert': defaultItem = { domain: '', acme_mode: 2, web_port: '80' }; break;
+            case 'inbound': defaultItem = { inbound_type: 1, port: '0', uuid: '', reality_sni: '', cert_domain: '', ws_path: '', ss_method: 2, enable_hop: 'n', hop_start: '60000', hop_end: '65000' }; break;
+            case 'outbound': defaultItem = { outbound_type: 1, socks_server: '127.0.0.1', socks_port: '1080', socks_user: '', socks_pass: '', outbound_match: '{"ip_cidr":["0.0.0.0/0","::/0"]}' }; break;
+            case 'cf_dns': defaultItem = { domain: '', zone_id: '' }; break;
+            case 'cf_origin_rule': defaultItem = { domain: '', zone_id: '', ws_path: '', port: '' }; break;
+            case 'cf_argo': defaultItem = { domain: '', argo_token: '' }; break;
+            default: return;
+        }
+        entries[type].push(defaultItem);
+        renderAll();
+        generateCommands();
+    }
+
+    function removeEntry(type, idx) {
+        entries[type].splice(idx, 1);
+        renderAll();
+        generateCommands();
+    }
+
+    // ---- 同步 ----
+    function syncDataFromDOM() {
+        document.querySelectorAll('.entry-item').forEach(el => {
+            const type = el.dataset.type;
+            const idx = parseInt(el.dataset.idx, 10);
+            if (!entries[type] || entries[type][idx] === undefined) return;
+            const item = entries[type][idx];
+            el.querySelectorAll('input, select').forEach(field => {
+                const key = field.dataset.field;
+                if (key) {
+                    item[key] = field.value;
+                }
+            });
+        });
+    }
+
+    // ---- 校验 ----
+    function validateCert(item) {
+        return item.domain && item.domain.trim() !== '';
+    }
+
+    function validateInbound(item) {
+        const proto = parseInt(item.inbound_type, 10);
+        if ([3,4,5].includes(proto)) {
+            if (!item.cert_domain || item.cert_domain.trim() === '') return false;
+        }
+        return true;
+    }
+
+    function validateOutbound(item) {
+        if (!item.outbound_type) return false;
+        if (!item.outbound_match || item.outbound_match.trim() === '') return false;
+        return true;
+    }
+
+    function validateCfDns(item) {
+        return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '';
+    }
+
+    function validateCfOriginRule(item) {
+        return item.domain && item.domain.trim() !== '' &&
+               item.zone_id && item.zone_id.trim() !== '' &&
+               item.ws_path && item.ws_path.trim() !== '' &&
+               item.port && item.port.trim() !== '';
+    }
+
+    function validateCfArgo(item) {
+        return item.domain && item.domain.trim() !== '' &&
+               item.argo_token && item.argo_token.trim() !== '';
+    }
+
+    function isValidEntry(type, item) {
+        switch(type) {
+            case 'cert': return validateCert(item);
+            case 'inbound': return validateInbound(item);
+            case 'outbound': return validateOutbound(item);
+            case 'cf_dns': return validateCfDns(item);
+            case 'cf_origin_rule': return validateCfOriginRule(item);
+            case 'cf_argo': return validateCfArgo(item);
+            default: return false;
+        }
+    }
+
+    function hasAnyValidTask() {
+        for (const [type, items] of Object.entries(entries)) {
+            for (const item of items) {
+                if (isValidEntry(type, item)) return true;
+            }
+        }
+        return false;
+    }
+
+    // ---- 生成命令 ----
+    function generateCommands() {
+        syncDataFromDOM();
+
+        const cfKey = globalCfKey.value.trim();
+        const cfEmail = globalCfEmail.value.trim();
+
+        let cmdType = 'curl';
+        cmdTypeRadios.forEach(r => { if (r.checked) cmdType = r.value; });
+        const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
+
+        let allCommands = [];
+        const taskMap = {
+            cert: 'cert',
+            inbound: 'inbound',
+            outbound: 'outbound',
+            cf_dns: 'cf_dns',
+            cf_origin_rule: 'cf_origin_rule',
+            cf_argo: 'cf_argo'
+        };
+
+        const needCf = (type, item) => {
+            if (type === 'cert' && parseInt(item.acme_mode,10) === 2) return true;
+            if (type === 'cf_dns' || type === 'cf_origin_rule' || type === 'cf_argo') return true;
+            return false;
+        };
+
+        let hasMissingCf = false;
+        for (const [type, items] of Object.entries(entries)) {
+            for (const item of items) {
+                if (needCf(type, item) && (!cfKey || !cfEmail)) {
+                    hasMissingCf = true;
+                    break;
+                }
+            }
+            if (hasMissingCf) break;
+        }
+
+        if (hasMissingCf) {
+            outputCmd.value = '⚠️ 检测到需要 Cloudflare 凭证的任务，请填写 CF_Key 和 CF_Email。';
+            return;
+        }
+
+        const hasTask = hasAnyValidTask();
+
+        if (hasTask && includeInstall.checked) {
+            allCommands.push(`# install (安装依赖和 Sing-box)\nXSB_TASKS="install" bash <(${fetchCmd})`);
+        }
+
+        for (const [type, items] of Object.entries(entries)) {
+            const task = taskMap[type];
+            if (!task || items.length === 0) continue;
+
+            const validItems = items.filter((item) => isValidEntry(type, item));
+
+            validItems.forEach((item, idx) => {
+                let vars = {};
+                switch(type) {
+                    case 'cert': {
+                        if (item.domain) vars.DOMAIN = item.domain;
+                        if (item.acme_mode) vars.ACME_MODE = item.acme_mode;
+                        if (parseInt(item.acme_mode,10) === 1 && item.web_port) {
+                            vars.WEB_PORT = item.web_port;
+                        }
+                        if (parseInt(item.acme_mode,10) === 2) {
+                            vars.CF_Key = cfKey;
+                            vars.CF_Email = cfEmail;
+                        }
+                        break;
+                    }
+                    case 'inbound': {
+                        const proto = parseInt(item.inbound_type, 10);
+                        vars.INBOUND_TYPE = proto;
+                        if (item.port && item.port.trim() !== '') vars.PORT = item.port;
+
+                        switch(proto) {
+                            case 1: // VLESS+Reality
+                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                if (item.reality_sni && item.reality_sni.trim() !== '') {
+                                    vars.REALITY_SERVER_NAME = item.reality_sni;
+                                }
+                                break;
+                            case 2: // AnyTLS+Reality
+                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                if (item.reality_sni && item.reality_sni.trim() !== '') {
+                                    vars.REALITY_SERVER_NAME = item.reality_sni;
+                                }
+                                break;
+                            case 3: // AnyTLS+TLS
+                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                break;
+                            case 4: // Hysteria2
+                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                if (item.enable_hop) vars.ENABLE_HOP = item.enable_hop;
+                                if (item.enable_hop === 'y') {
+                                    if (item.hop_start && item.hop_start.trim() !== '') vars.HY2_HOP_START = item.hop_start;
+                                    if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END = item.hop_end;
+                                }
+                                break;
+                            case 5: // VMess+WSS
+                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item.ws_path;
+                                break;
+                            case 6: // Shadowsocks
+                                if (item.ss_method) vars.METHOD = item.ss_method;
+                                if (item.uuid && item.uuid.trim() !== '') vars.PASSWORD = item.uuid;
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
+                    }
+                    case 'outbound': {
+                        const obType = parseInt(item.outbound_type, 10);
+                        vars.OUTBOUND_TYPE = obType;
+                        if (item.outbound_match) vars.OUTBOUND_MATCH = item.outbound_match;
+                        if (obType === 1) {
+                            if (item.socks_server && item.socks_server.trim() !== '') vars.SOCKS5_SERVER = item.socks_server;
+                            if (item.socks_port && item.socks_port.trim() !== '') vars.SOCKS5_PORT = item.socks_port;
+                            if (item.socks_user && item.socks_user.trim() !== '') vars.SOCKS5_USER = item.socks_user;
+                            if (item.socks_pass && item.socks_pass.trim() !== '') vars.SOCKS5_PASS = item.socks_pass;
+                        }
+                        break;
+                    }
+                    case 'cf_dns': {
+                        if (item.domain) vars.DOMAIN = item.domain;
+                        if (item.zone_id) vars.ZONE_ID = item.zone_id;
+                        vars.CF_Key = cfKey;
+                        vars.CF_Email = cfEmail;
+                        break;
+                    }
+                    case 'cf_origin_rule': {
+                        if (item.domain) vars.DOMAIN = item.domain;
+                        if (item.zone_id) vars.ZONE_ID = item.zone_id;
+                        if (item.ws_path) vars.WS_PATH = item.ws_path;
+                        if (item.port) vars.PORT = item.port;
+                        vars.CF_Key = cfKey;
+                        vars.CF_Email = cfEmail;
+                        break;
+                    }
+                    case 'cf_argo': {
+                        if (item.domain) vars.DOMAIN = item.domain;
+                        if (item.argo_token) vars.ARGO_TOKEN = item.argo_token;
+                        vars.CF_Key = cfKey;
+                        vars.CF_Email = cfEmail;
+                        break;
+                    }
+                }
+                const varParts = [];
+                for (const [k, v] of Object.entries(vars)) {
+                    if (v !== undefined && v !== '') {
+                        const escaped = String(v).replace(/"/g, '\\"');
+                        varParts.push(`${k}="${escaped}"`);
+                    }
+                }
+                if (varParts.length === 0) return;
+                const varStr = varParts.join(' ');
+                const cmd = `XSB_TASKS="${task}" ${varStr} bash <(${fetchCmd})`;
+                const comment = `# ${type} #${idx+1}`;
+                allCommands.push(`${comment}\n${cmd}`);
+            });
+        }
+
+        // ---- tune ----
+        if (includeTune.checked && hasTask) {
+            allCommands.push(`# tune (TCP 智能调优)\nXSB_TASKS="tune" bash <(${fetchCmd})`);
+        }
+
+        if (allCommands.length === 0) {
+            outputCmd.value = '⚠️ 没有有效的配置条目，请确保必填字段均已填写。';
+            return;
+        }
+
+        outputCmd.value = allCommands.join('\n\n');
+    }
+
+    // ---- 复制 ----
+    function copyAll() {
+        const text = outputCmd.value;
+        if (!text || text.startsWith('⚠️')) {
+            copyFeedback.textContent = '⚠️ 无有效命令';
+            copyFeedback.classList.add('show');
+            setTimeout(() => copyFeedback.classList.remove('show'), 2000);
+            return;
+        }
+        navigator.clipboard.writeText(text).then(() => {
+            copyFeedback.textContent = '✅ 已复制';
+            copyFeedback.classList.add('show');
+            setTimeout(() => copyFeedback.classList.remove('show'), 2500);
+        }).catch(() => {
+            outputCmd.select();
+            document.execCommand('copy');
+            copyFeedback.textContent = '✅ 已复制';
+            copyFeedback.classList.add('show');
+            setTimeout(() => copyFeedback.classList.remove('show'), 2500);
+        });
+    }
+
+    // ---- 重置 ----
+    function resetAll() {
+        if (!confirm('清空所有已添加的条目？')) return;
+        entries = { cert: [], inbound: [], outbound: [], cf_dns: [], cf_origin_rule: [], cf_argo: [] };
+        renderAll();
+        generateCommands();
+    }
+
+    // ---- 事件绑定 ----
+    btnGenerate.addEventListener('click', generateCommands);
+    btnCopy.addEventListener('click', copyAll);
+    btnReset.addEventListener('click', resetAll);
+    includeTune.addEventListener('change', generateCommands);
+    includeInstall.addEventListener('change', generateCommands);
+
+    let timer;
+    document.addEventListener('input', function(e) {
+        if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
+            clearTimeout(timer);
+            timer = setTimeout(generateCommands, 400);
+        }
+    });
+    document.addEventListener('change', function(e) {
+        if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
+            clearTimeout(timer);
+            timer = setTimeout(generateCommands, 400);
+        }
+    });
+
+    cmdTypeRadios.forEach(r => r.addEventListener('change', generateCommands));
+
+    // ---- 初始化 ----
+    function init() {
+        initTheme();
+        renderAll();
+        generateCommands();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+})();
+</script>
+</body>
+</html>
