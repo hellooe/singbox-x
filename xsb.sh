@@ -25,12 +25,6 @@ else
     echo -e "${RED}无法识别系统${PLAIN}" && exit 1
 fi
 
-case $(uname -m) in
-    x86_64)  ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-    *) echo -e "${RED}不支持的架构${PLAIN}" && exit 1 ;;
-esac
-
 # -------------------- 依赖安装 --------------------
 install_deps() {
     echo -e "${GREEN}安装基础依赖...${PLAIN}"
@@ -119,16 +113,36 @@ install_singbox() {
         echo -e "${YELLOW}Sing-box 已安装，版本: $(sing-box version | head -1)${PLAIN}"
         return 0
     fi
-    echo -e "${GREEN}下载并安装 Sing-box 到 $XSB_DIR/bin...${PLAIN}"
+    echo -e "${GREEN}安装 Sing-box...${PLAIN}"
     LATEST=$(curl -s --max-time 5 https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | head -1 | awk -F '"' '{print $4}' | sed 's/v//')
     if [[ -z "$LATEST" ]]; then
-        echo -e "${YELLOW}获取最新版本失败，使用默认 1.10.6${PLAIN}"
-        LATEST="1.13.12"
+        echo -e "${YELLOW}获取最新版本失败，使用默认 1.13.13${PLAIN}"
+        LATEST="1.13.13"
     fi
-    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LATEST}/sing-box-${LATEST}-linux-${ARCH}.tar.gz"
+
+     case $(uname -m) in
+        x86_64)  SB_ARCH="amd64" ;;
+        aarch64) SB_ARCH="arm64" ;;
+        *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
+    esac
+
+    if ldd --version 2>&1 | grep -q musl; then
+        LIBC="musl"
+    else
+        LIBC="glibc"
+    fi
+
+    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LATEST}/sing-box-${LATEST}-linux-${SB_ARCH}-${LIBC}.tar.gz"
     wget -O /tmp/sing-box.tar.gz "$DOWNLOAD_URL" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
+
     tar -xzf /tmp/sing-box.tar.gz -C /tmp
-    cp /tmp/sing-box-${LATEST}-linux-${ARCH}/sing-box "$XSB_DIR/bin/"
+    EXTRACT_DIR=$(find /tmp -maxdepth 1 -type d -name "sing-box-${LATEST}-linux-*" | head -1)
+    if [[ -z "$EXTRACT_DIR" ]]; then
+        echo -e "${RED}未找到解压目录${PLAIN}"
+        return 1
+    fi
+    cp "$EXTRACT_DIR/sing-box" "$XSB_DIR/bin/"
+    chmod +x "$XSB_DIR/bin/sing-box"
     rm -rf /tmp/sing-box*
     if ! command -v sing-box &>/dev/null; then
         echo -e "${RED}Sing-box 安装失败${PLAIN}" && exit 1
@@ -154,7 +168,7 @@ uninstall_singbox() {
         rm -f /etc/systemd/system/sing-box.service
     fi
     rm -f "$XSB_DIR/bin/sing-box"
-    echo -e "${GREEN}已卸载。配置文件保留在 $XSB_DIR/conf${PLAIN}"
+    echo -e "${GREEN}已卸载。配置文件保留，不需要可直接 rm -rf $XSB_DIR{PLAIN}"
 }
 
 manage_singbox() {
@@ -203,6 +217,7 @@ add_cert() {
     fi
 
     echo "选择验证方式: 1) HTTP-01  2) DNS-01 (Cloudflare)"
+    echo "注意：NAT 机器请使用 DNS-01 方式"
     read -p "输入 [1/2]: " acme_mode
     case $acme_mode in
         1)
@@ -597,7 +612,7 @@ install_brutal() {
         echo -e "${GREEN}Brutal 已加载${PLAIN}" && return 0
     fi
     echo -e "${GREEN}安装 tcp-brutal...${PLAIN}"
-    bash <(curl -fsSL https://github.com/apernet/tcp-brutal/blob/master/scripts/install_dkms.sh)
+    bash <(curl -fsSL https://raw.githubusercontent.com/apernet/tcp-brutal/refs/heads/master/scripts/install_dkms.sh)
 }
 
 setup_hy2_hop() {
@@ -955,7 +970,14 @@ cf_argo() {
 
     if [[ ! -f "$XSB_DIR/bin/cloudflared" ]]; then
         echo -e "${GREEN}下载 cloudflared...${PLAIN}"
-        url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARCH"
+
+        case $(uname -m) in
+            x86_64)  CF_ARCH="amd64" ;;
+            aarch64) CF_ARCH="arm64" ;;
+            *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
+        esac
+
+        url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}"
         wget -O "$XSB_DIR/bin/cloudflared" "$url" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
         chmod +x "$XSB_DIR/bin/cloudflared"
     fi
@@ -1052,12 +1074,35 @@ tcp_tune() {
     echo -e "${YELLOW}开始 TCP 智能调优${PLAIN}"
     if [[ ! -f "$XSB_DIR/bin/speedtest" ]]; then
         echo -e "${GREEN}安装 Speedtest...${PLAIN}"
-        wget -O /tmp/speedtest.tgz "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-${ARCH}.tgz" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
+
+        case $(uname -m) in
+            x86_64)  ST_ARCH="x86_64" ;;
+            aarch64) ST_ARCH="aarch64" ;;
+            *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
+        esac
+
+        FILE_NAME=$(curl -s --max-time 5 "https://www.speedtest.net/apps/cli" | \
+                    grep -o "ookla-speedtest-[0-9.]\+-linux-${ST_ARCH}\.tgz" | \
+                    head -1)
+
+        if [[ -z "$FILE_NAME" ]]; then
+            echo -e "${RED}❌ 未找到 ${ST_ARCH} 对应的安装包${PLAIN}"
+            return 1
+        fi
+
+        wget -O /tmp/speedtest.tgz "https://install.speedtest.net/app/cli/${FILE_NAME}" || {
+            echo -e "${RED}❌ 下载失败${PLAIN}"
+            return 1
+        }
+
         tar -xzf /tmp/speedtest.tgz -C /tmp
         mv /tmp/speedtest "$XSB_DIR/bin/"
         chmod +x "$XSB_DIR/bin/speedtest"
         rm -f /tmp/speedtest.tgz
+
+        echo -e "${GREEN}✅ Speedtest 安装完成${PLAIN}"
     fi
+
     read -p "服务器 ID（默认 1536 香港）: " SERVER_ID
     SERVER_ID=${SERVER_ID:-1536}
     echo -e "${GREEN}测速中...${PLAIN}"
