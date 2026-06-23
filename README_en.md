@@ -12,7 +12,7 @@ Languages: English | [简体中文](README.md)
 
 - Install / update / uninstall Sing-box
 - Multi-domain ACME certificate management (HTTP-01 / DNS-01)
-- Multiple inbound protocols (VLESS+Reality, AnyTLS+Reality, AnyTLS+TLS, Hysteria2, VMess+WS+TLS)
+- Multiple inbound protocols (VLESS+Reality, AnyTLS+Reality, AnyTLS+TLS, Hysteria2, VMess+WS+TLS, SS2022)
 - Outbound proxies (SOCKS5, WARP)
 - Hysteria2 port hopping (based on iptables)
 - TCP kernel parameter smart tuning (based on speed test results)
@@ -34,7 +34,7 @@ Languages: English | [简体中文](README.md)
 ## 📦 Installation and Execution
 
 ```bash
-wget -O xsb.sh https://github.com/hellooe/singbox-x/blob/master/xsb.sh
+wget -O xsb.sh https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh
 chmod +x xsb.sh
 ./xsb.sh
 ```
