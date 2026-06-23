@@ -1,24 +1,33 @@
-# Sing-box All-in-One Node Management Script (xsb.sh)
+```markdown
+# Sing-box Universal Node Management Script (xsb.sh)
 
-Languages: English | [简体中文](README.md)
+Language: English | [简体中文](README.md)
 
-> A one-stop Sing-box proxy node management tool that integrates certificate management, inbound/outbound configuration, smart routing, Brutal installation, port hopping, TCP smart tuning, Cloudflare DNS management, origin rules, Argo tunnel setup, and supports Alpine Linux.
+> All-in-one Sing-box proxy node management script, integrating certificate management, inbound/outbound configuration, routing rules, Brutal installation, port hopping, TCP intelligent tuning, Cloudflare DNS management, Cloudflare origin rules, Argo tunnel setup, and Alpine Linux support.  
+> **New**: Supports **environment-variable-driven rapid deployment**, and works with a Web Generator to produce one-click multi-task command lists.
 
 ---
 
-## 📋 Overview
+## 📋 Introduction
 
-`xsb.sh` is a Bash script designed for rapid deployment and management of **Sing-box** proxy nodes. It follows a modular architecture, storing all configuration files under `~/xsb/`, and provides an interactive menu to easily accomplish the following tasks:
+`xsb.sh` is designed for rapid deployment and management of **Sing-box** proxy nodes. It adopts a modular architecture, with all configuration files stored under `~/xsb/`. Two usage modes are provided:
 
-- Install / update / uninstall Sing-box
-- Multi-domain ACME certificate management (HTTP-01 / DNS-01)
-- Multiple inbound protocols (VLESS+Reality, AnyTLS+Reality, AnyTLS+TLS, Hysteria2, VMess+WS+TLS, SS2022)
+- **Interactive Menu**: Suitable for manual step-by-step configuration, intuitive and straightforward.
+- **Non-interactive Task Mode**: Specify tasks via the `XSB_TASKS` environment variable, ideal for automated deployment (can be used with the Web Generator).
+
+You can use the **Web Generator** provided in this repository ([https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)) to generate the required command list online, then copy and execute it on your server for one‑click rapid deployment.
+
+### Core Features
+
+- Install / Update / Uninstall Sing-box
+- Multi‑domain ACME certificate management (HTTP-01 / DNS-01)
+- Multiple inbound protocols (VLESS+Reality, AnyTLS+Reality, AnyTLS+TLS, Hysteria2, VMess+WS+TLS, Shadowsocks 2022)
 - Outbound proxies (SOCKS5, WARP)
 - Hysteria2 port hopping (based on iptables)
-- TCP kernel parameter smart tuning (based on speed test results)
-- Cloudflare DNS record management, Origin Rule, and Argo fixed tunnel configuration
-- Automatically build Sing-box configuration and start the service
-- Generate node share links (supports IPv4 / IPv6)
+- TCP kernel parameter intelligent tuning (based on speed test results)
+- Cloudflare DNS record management, Origin Rules, and Argo fixed tunnel configuration
+- Automatic Sing-box configuration building and service startup
+- Retrieve node links (supports IPv4 / IPv6)
 
 ---
 
@@ -31,7 +40,9 @@ Languages: English | [简体中文](README.md)
 
 ---
 
-## 📦 Installation and Execution
+## 📦 Installation & Usage
+
+### Interactive Mode (Manual Configuration)
 
 ```bash
 wget -O xsb.sh https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh
@@ -39,84 +50,109 @@ chmod +x xsb.sh
 ./xsb.sh
 ```
 
-### Inbound Management
+After running, the main menu will appear; follow the on‑screen instructions.
 
-Supports five of the most popular protocols:
+### Non‑interactive Task Mode (Rapid Deployment)
 
-| Protocol | Description |
-|----------|-------------|
-| VLESS+Reality | Reality with strong camouflage, no domain required |
-| AnyTLS+Reality | AnyTLS-based Reality inbound |
-| AnyTLS+TLS | AnyTLS + standard TLS certificate |
-| Hysteria2 | Supports port hopping, UDP acceleration |
-| VMess+WSS | WebSocket + TLS, can be CDN‑proxied, solves IP blocking issues |
+You can specify a list of tasks via the `XSB_TASKS` environment variable (comma‑separated). The script will execute them in order and automatically build the configuration and start the service.
 
-Each inbound generates an independent JSON file (`~/xsb/inbounds/inbound_<tag>.json`).
+```bash
+# Example: Install + obtain certificate
+XSB_TASKS="install,cert" \
+DOMAIN="example.com" \
+ACME_MODE="2" \
+CF_Key="your_api_key" \
+CF_Email="your_email" \
+bash <(curl -Ls https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh)
+```
 
-### Outbound Management
+#### Supported Task List
 
-- **SOCKS5** outbound: supports custom server, port, username/password.
-- **WARP**: configure a WARP outbound and add routing rules to easily unlock certain websites.
+| Task Name | Description |
+|-----------|-------------|
+| `install` | Install base dependencies and Sing-box |
+| `cert`    | Obtain a certificate (requires `DOMAIN`, `ACME_MODE`, etc.) |
+| `inbound` | Add an inbound (requires `INBOUND_TYPE`, `PORT`, etc.) |
+| `outbound`| Add an outbound (requires `OUTBOUND_TYPE`, `OUTBOUND_MATCH`, etc.) |
+| `cf_dns`  | Configure Cloudflare DNS records (requires `DOMAIN`, `ZONE_ID`, CF credentials) |
+| `cf_origin_rule` | Configure Origin Rule (requires `DOMAIN`, `ZONE_ID`, `WS_PATH`, `PORT`, CF credentials) |
+| `cf_argo` | Configure Argo tunnel (requires `DOMAIN`, `ARGO_TOKEN`, CF credentials) |
+| `tune`    | Perform TCP intelligent tuning |
+| `build`   | Only build configuration and start service (usually triggered automatically) |
 
-Outbound configuration files are stored in `~/xsb/outbounds/`, and corresponding routing rules are automatically generated (`~/xsb/conf/routes/route_<tag>.json`).
+#### Environment Variable Reference
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DOMAIN` | Domain name | `example.com` |
+| `ACME_MODE` | Certificate validation method: 1=HTTP-01, 2=DNS-01 | `2` |
+| `WEB_PORT` | HTTP-01 validation port (default 80) | `80` |
+| `CF_Key` | Cloudflare API Key | `` |
+| `CF_Email` | Cloudflare login email | `` |
+| `ZONE_ID` | Cloudflare Zone ID | `` |
+| `INBOUND_TYPE` | Inbound protocol: 1~6 (see protocol mapping table) | `4` |
+| `PORT` | Inbound listening port (0 = random) | `0` |
+| `UUID` / `PASSWORD` | Credentials (leave empty for auto‑generation) | `` |
+| `REALITY_SERVER_NAME` | Reality server name | `www.apple.com` |
+| `CERT_DOMAIN` | Domain for existing certificate | `example.com` |
+| `WS_PATH` | WebSocket path | `/vm-xxx` |
+| `METHOD` | Shadowsocks encryption method (1=128-gcm, 2=256-gcm, 3=chacha20) | `2` |
+| `ENABLE_HOP` | Hysteria2 port hopping (y/n) | `y` |
+| `HY2_HOP_START` / `HY2_HOP_END` | Port hopping range | `60000` / `65000` |
+| `OUTBOUND_TYPE` | Outbound type: 1=SOCKS5, 2=WARP | `` |
+| `OUTBOUND_MATCH` | Routing match rules (JSON) | `{"ip_cidr":["0.0.0.0/0"]}` |
+| `SOCKS5_SERVER` / `SOCKS5_PORT` | SOCKS5 server address and port | `127.0.0.1` / `1080` |
+| `SOCKS5_USER` / `SOCKS5_PASS` | SOCKS5 authentication (optional) | `user` / `pass` |
+| `ARGO_TOKEN` | Argo tunnel Token | `ey...` |
+
+#### Protocol Mapping (INBOUND_TYPE)
+
+| Value | Protocol |
+|-------|----------|
+| 1     | VLESS+Reality |
+| 2     | AnyTLS+Reality |
+| 3     | AnyTLS+TLS |
+| 4     | Hysteria2 |
+| 5     | VMess+WSS |
+| 6     | Shadowsocks |
+
+> 💡 It is recommended to use the **Web Generator** – no need to remember variables manually. Generate commands via a simple form:  
+> [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
 
 ---
 
-### Cloudflare Configuration
+## 🌐 Web Generator
 
-#### Configure Origin Rule
-- Automatically detect existing VMess inbound, extract Host and WS path.
-- Create an Origin Rule that forwards requests for the specified domain path to the corresponding port.
+This project provides a **visual command generator** to help you quickly generate a complete deployment command list by filling out a form. Steps:
 
-#### Configure Argo Tunnel
-- Download `cloudflared` and install it as a system service.
-- Automatically match VMess inbound and establish a fixed tunnel.
-- Works even without a public IP address.
+1. Visit [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
+2. Add certificate, inbound, outbound, Cloudflare configurations, etc., as needed
+3. Click "Generate Commands" and copy the full list
+4. Execute on your server (as root) in order
 
-#### Configure DNS Records
-- Obtain the machine’s IPv4 / IPv6 addresses and automatically add or update Cloudflare A / AAAA records.
-- Convenient for dynamic IP management.
-
-All the above features require Cloudflare API credentials (`~/xsb/conf/cf_creds`); the script will guide you through filling them in.
+The generator automatically adds `install` and `tune` tasks and intelligently validates Cloudflare credentials to ensure complete and correct commands.
 
 ---
 
-### TCP Smart Tuning
-
-- Automatically download the **Speedtest** CLI tool.
-- After a speed test, automatically calculate and set kernel buffer sizes based on **upload bandwidth**.
-- Enable BBR congestion control and optimize various `sysctl` parameters, saved to `/etc/sysctl.d/99-tcp.conf`.
-
----
-
-### Retrieve Node Links
-
-- Generate **share links** (VLESS, AnyTLS, Hysteria2, VMess formats) for each inbound.
-- Supports both IPv4 and IPv6 output.
-
----
-
-## 🔧 Configuration File Structure
+## 🔧 Configuration Directory Structure
 
 All data is stored under `~/xsb/`:
 
 ```
 ~/xsb/
-├── bin/                # Executable files (sing-box, cloudflared, speedtest)
+├── bin/                # Executables (sing-box, cloudflared, speedtest)
 ├── cert/               # Certificates (one subdirectory per domain)
 │   └── <domain>/
 │       ├── cert.crt
 │       └── private.key
 ├── conf/               # Global configuration
-│   ├── cf_creds        # Cloudflare API credentials (to be filled manually)
-│   ├── uuid            # Global UUID
-│   ├── ipv4 / ipv6     # Cached local IPs
+│   ├── env.conf        # Persisted environment variables (auto‑saved)
 │   ├── argo_token      # Argo tunnel token
 │   └── routes/         # Routing rules (one per outbound)
 ├── inbounds/           # Inbound configuration files (JSON)
 │   ├── inbound_<tag>.json
 │   ├── inbound_<tag>.hop          # Hysteria2 port range
-│   └── inbound_<tag>_reality_*    # Reality private/public key and short_id
+│   └── inbound_<tag>_reality_*    # Reality keys
 └── outbounds/          # Outbound configuration files
     ├── outbound_<tag>.json
     └── endpoint_<tag>.json         # WireGuard endpoint
@@ -124,25 +160,11 @@ All data is stored under `~/xsb/`:
 
 ---
 
-## ⚙️ Cloudflare Credentials Configuration
-
-On first run, the script generates a template at `~/xsb/conf/cf_creds`. You need to edit it and fill in:
-
-```bash
-CF_API_KEY=your_cloudflare_api_key
-CF_EMAIL=your_email
-ZONE_ID=your_zone_id
-DOMAIN=your_main_domain
-```
-
-**Security Tip**: When exiting the script, you can choose to clear the credential contents automatically to prevent sensitive information leakage.
-
----
-
 ## 📄 License
 
-This script is released under the **MIT License**. Free to use, modify, and distribute.
+This script is released under the **MIT License** – free to use, modify, and distribute.
 
 ---
 
-**Enjoy using it!** If you have any issues, feel free to submit an Issue.
+**Enjoy!** If you have any questions or suggestions, feel free to open an [Issue](https://github.com/hellooe/singbox-x/issues).
+```
