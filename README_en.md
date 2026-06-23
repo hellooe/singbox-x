@@ -1,4 +1,3 @@
-```markdown
 # Sing-box Universal Node Management Script (xsb.sh)
 
 Language: English | [简体中文](README.md)
@@ -167,4 +166,3 @@ This script is released under the **MIT License** – free to use, modify, and d
 ---
 
 **Enjoy!** If you have any questions or suggestions, feel free to open an [Issue](https://github.com/hellooe/singbox-x/issues).
-```
