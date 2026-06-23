@@ -1,6 +1,6 @@
 #!/bin/bash
 #===============================================================
-# 交互式 Sing-box 全能节点管理脚本
+# 一站式 Sing-box 全能节点管理脚本
 # 所有文件存放于 ~/xsb/
 # 功能: 安装Singbox | ACME多证书管理 | 增删入站/出站
 #       安装Brutal并实现端口跳跃 | TCP智能调优
@@ -12,8 +12,53 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; PLAIN='\033[0m'
 XSB_DIR="$HOME/xsb"
 mkdir -p "$XSB_DIR"/{bin,cert,conf,inbounds,outbounds}
 export PATH="$XSB_DIR/bin:$PATH"
+XSB_CONF_FILE="$XSB_DIR/conf/env.conf"
 
-# -------------------- 检测系统 --------------------
+save_config() {
+    local var="$1"
+    local value="$2"
+    if [[ -f "$XSB_CONF_FILE" ]]; then
+        if grep -q "^$var=" "$XSB_CONF_FILE"; then
+            awk -v v="$var" -v val="$value" 'BEGIN{OFS=FS="="} $1==v {$0=v "=" val} 1' "$XSB_CONF_FILE" > "${XSB_CONF_FILE}.tmp" && mv "${XSB_CONF_FILE}.tmp" "$XSB_CONF_FILE"
+        else
+            echo "$var=$value" >> "$XSB_CONF_FILE"
+        fi
+    else
+        echo "$var=$value" > "$XSB_CONF_FILE"
+        chmod 600 "$XSB_CONF_FILE"
+    fi
+}
+
+get_or_ask() {
+    local var="$1"
+    local prompt="$2"
+    local default="$3"
+    local value=""
+
+    eval "value=\${$var:-}"
+    if [[ -n "$value" ]]; then
+        save_config "$var" "$value"
+        echo "$value"
+        return 0
+    fi
+
+    if [[ -f "$XSB_CONF_FILE" ]]; then
+        value=$(grep -E "^$var=" "$XSB_CONF_FILE" 2>/dev/null | head -1 | cut -d'=' -f2-)
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return 0
+        fi
+    fi
+
+    read -p "$prompt: " value
+    if [[ -z "$value" ]]; then
+        value="$default"
+    fi
+    save_config "$var" "$value"
+    echo "$value"
+}
+
+# ---------- 系统检测 ----------
 if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}请使用 root 用户运行${PLAIN}" && exit 1
 fi
@@ -25,7 +70,7 @@ else
     echo -e "${RED}无法识别系统${PLAIN}" && exit 1
 fi
 
-# -------------------- 依赖安装 --------------------
+# ---------- 依赖安装 ----------
 install_deps() {
     echo -e "${GREEN}安装基础依赖...${PLAIN}"
     case $OS in
@@ -46,68 +91,7 @@ install_deps() {
     esac
 }
 
-init_cf_creds() {
-    local cred_file="$XSB_DIR/conf/cf_creds"
-    if [[ ! -f "$cred_file" ]]; then
-        mkdir -p "$(dirname "$cred_file")"
-        cat > "$cred_file" <<EOF
-CF_API_KEY=
-CF_EMAIL=
-ZONE_ID=
-DOMAIN=
-EOF
-        chmod 600 "$cred_file" 2>/dev/null
-        echo -e "${YELLOW}已创建凭证模板文件: $cred_file${PLAIN}"
-        echo -e "请根据需要编辑该文件，填写相应的信息"
-    fi
-}
-
-cleanup_creds() {
-    local cred_file="$XSB_DIR/conf/cf_creds"
-    if [[ -f "$cred_file" ]]; then
-        cat > "$cred_file" <<EOF
-CF_API_KEY=
-CF_EMAIL=
-ZONE_ID=
-DOMAIN=
-EOF
-        echo -e "${YELLOW}已清除 Cloudflare 凭证值${PLAIN}"
-    fi
-    unset CF_API_KEY CF_EMAIL ZONE_ID DOMAIN
-}
-
-ensure_cf_creds() {
-    local cred_file="$XSB_DIR/conf/cf_creds"
-    if [[ ! -f "$cred_file" ]]; then
-        echo -e "${RED}凭证文件不存在${PLAIN}" >&2
-        return 1
-    fi
-
-    set -a
-    source "$cred_file"
-    set +a
-
-    if [[ -z "$CF_API_KEY" || -z "$CF_EMAIL" ]]; then
-        echo -e "${RED}凭证不完整：请设置 CF_API_KEY 和 CF_EMAIL${PLAIN}" >&2
-        return 1
-    fi
-    return 0
-}
-
-cf_api_request() {
-    local method=$1
-    local url=$2
-    local data=$3
-    headers=(-H "X-Auth-Email: $CF_EMAIL" -H "X-Auth-Key: $CF_API_KEY" -H "Content-Type: application/json")
-
-    if [[ -n "$data" ]]; then
-        curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}" --data "$data"
-    else
-        curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}"
-    fi
-}
-
-# -------------------- Sing-box 安装/更新/卸载 --------------------
+# ---------- Sing-box 安装 ----------
 install_singbox() {
     if [[ -f "$XSB_DIR/bin/sing-box" ]]; then
         echo -e "${YELLOW}Sing-box 已安装，版本: $(sing-box version | head -1)${PLAIN}"
@@ -115,38 +99,21 @@ install_singbox() {
     fi
     echo -e "${GREEN}安装 Sing-box...${PLAIN}"
     LATEST=$(curl -s --max-time 5 https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | head -1 | awk -F '"' '{print $4}' | sed 's/v//')
-    if [[ -z "$LATEST" ]]; then
-        echo -e "${YELLOW}获取最新版本失败，使用默认 1.13.13${PLAIN}"
-        LATEST="1.13.13"
-    fi
-
-     case $(uname -m) in
+    [[ -z "$LATEST" ]] && LATEST="1.13.13"
+    case $(uname -m) in
         x86_64)  SB_ARCH="amd64" ;;
         aarch64) SB_ARCH="arm64" ;;
         *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
     esac
-
-    if ldd --version 2>&1 | grep -q musl; then
-        LIBC="musl"
-    else
-        LIBC="glibc"
-    fi
-
+    ldd --version 2>&1 | grep -q musl && LIBC="musl" || LIBC="glibc"
     DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${LATEST}/sing-box-${LATEST}-linux-${SB_ARCH}-${LIBC}.tar.gz"
     wget -O /tmp/sing-box.tar.gz "$DOWNLOAD_URL" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
-
     tar -xzf /tmp/sing-box.tar.gz -C /tmp
     EXTRACT_DIR=$(find /tmp -maxdepth 1 -type d -name "sing-box-${LATEST}-linux-*" | head -1)
-    if [[ -z "$EXTRACT_DIR" ]]; then
-        echo -e "${RED}未找到解压目录${PLAIN}"
-        return 1
-    fi
     cp "$EXTRACT_DIR/sing-box" "$XSB_DIR/bin/"
     chmod +x "$XSB_DIR/bin/sing-box"
     rm -rf /tmp/sing-box*
-    if ! command -v sing-box &>/dev/null; then
-        echo -e "${RED}Sing-box 安装失败${PLAIN}" && exit 1
-    fi
+    command -v sing-box &>/dev/null || { echo -e "${RED}安装失败${PLAIN}"; exit 1; }
     echo -e "${GREEN}Sing-box 版本: $(sing-box version | head -1)${PLAIN}"
 }
 
@@ -166,34 +133,19 @@ uninstall_singbox() {
         systemctl stop sing-box 2>/dev/null
         systemctl disable sing-box 2>/dev/null
         rm -f /etc/systemd/system/sing-box.service
+        systemctl daemon-reload
     fi
     rm -f "$XSB_DIR/bin/sing-box"
-    echo -e "${GREEN}已卸载。配置文件保留，不需要可直接 rm -rf $XSB_DIR{PLAIN}"
+    echo -e "${GREEN}已卸载。配置文件保留，不需要可直接 rm -rf $XSB_DIR${PLAIN}"
 }
 
-manage_singbox() {
-    echo -e "\n${YELLOW}--- Sing-box 管理 ---${PLAIN}"
-    echo "1) 安装"
-    echo "2) 更新"
-    echo "3) 卸载"
-    read -p "选择 [1-3]: " choice
-    case $choice in
-        1) install_singbox ;;
-        2) update_singbox ;;
-        3) uninstall_singbox ;;
-        *) echo -e "${RED}无效选择${PLAIN}" ;;
-    esac
-}
-
-# -------------------- 证书管理（多域名） --------------------
+# ---------- 证书管理 ----------
 list_certs() {
     echo -e "${GREEN}已安装的证书:${PLAIN}"
     if [[ -d "$XSB_DIR/cert" ]]; then
         find "$XSB_DIR/cert" -maxdepth 1 -type d -not -path "$XSB_DIR/cert" | while read d; do
             domain=$(basename "$d")
-            if [[ -f "$d/cert.crt" && -f "$d/private.key" ]]; then
-                echo "  $domain"
-            fi
+            [[ -f "$d/cert.crt" && -f "$d/private.key" ]] && echo "  $domain"
         done
     else
         echo "  无"
@@ -201,42 +153,31 @@ list_certs() {
 }
 
 add_cert() {
-    echo -e "${YELLOW}添加新证书${PLAIN}"
-    read -p "请输入域名: " DOMAIN
-    if [[ -z "$DOMAIN" ]]; then
-        echo -e "${RED}域名不能为空${PLAIN}" && return 1
-    fi
-    if [[ -d "$XSB_DIR/cert/$DOMAIN" ]]; then
-        echo -e "${YELLOW}该域名证书已存在${PLAIN}" && return 1
-    fi
+    DOMAIN=$(get_or_ask "DOMAIN" "请输入域名" "")
+    [[ -z "$DOMAIN" ]] && { echo -e "${RED}域名不能为空${PLAIN}"; return 1; }
+    [[ -d "$XSB_DIR/cert/$DOMAIN" ]] && { echo -e "${YELLOW}证书已存在${PLAIN}"; return 1; }
     mkdir -p "$XSB_DIR/cert/$DOMAIN"
+    [[ ! -f ~/.acme.sh/acme.sh ]] && curl -s https://get.acme.sh | sh
 
-    if [[ ! -f ~/.acme.sh/acme.sh ]]; then
-        echo -e "${GREEN}安装 acme.sh 到 ~/.acme.sh...${PLAIN}"
-        curl -s https://get.acme.sh | sh
-    fi
-
-    echo "选择验证方式: 1) HTTP-01  2) DNS-01 (Cloudflare)"
-    echo "注意：NAT 机器请使用 DNS-01 方式"
-    read -p "输入 [1/2]: " acme_mode
-    case $acme_mode in
+    ACME_MODE=$(get_or_ask "ACME_MODE" "验证方式 (1=HTTP-01, 2=DNS-01)" "2")
+    case $ACME_MODE in
         1)
-            read -p "HTTP 验证端口（默认 80）: " WEB_PORT
-            WEB_PORT=${WEB_PORT:-80}
+            WEB_PORT=$(get_or_ask "WEB_PORT" "HTTP 验证端口" "80")
             ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
             ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone --httpport $WEB_PORT
             ;;
         2)
-            ensure_cf_creds || return 1
-            export CF_Key="$CF_API_KEY"
-            export CF_Email="$CF_EMAIL"
+            CF_Key=$(get_or_ask "CF_Key" "Cloudflare API Key" "")
+            CF_Email=$(get_or_ask "CF_Email" "Cloudflare Email" "")
+            if [[ -z "$CF_Key" || -z "$CF_Email" ]]; then
+                echo -e "${RED}需要 Cloudflare 凭证 (CF_Key, CF_Email)${PLAIN}"
+                return 1
+            fi
             ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
             ~/.acme.sh/acme.sh --issue --dns dns_cf -d "$DOMAIN" -d "*.${DOMAIN}"
             ;;
-        *)
-            echo -e "${RED}无效选择${PLAIN}" && return 1
+        *) echo -e "${RED}无效选择${PLAIN}"; return 1 ;;
     esac
-
     ~/.acme.sh/acme.sh --installcert -d "$DOMAIN" \
         --key-file "$XSB_DIR/cert/$DOMAIN/private.key" \
         --fullchain-file "$XSB_DIR/cert/$DOMAIN/cert.crt"
@@ -247,379 +188,201 @@ add_cert() {
 
 delete_cert() {
     list_certs
-    read -p "请输入要删除的域名: " DOMAIN
+    DOMAIN=$(get_or_ask "DELETE_DOMAIN" "请输入要删除的域名" "")
     if [[ -d "$XSB_DIR/cert/$DOMAIN" ]]; then
         ~/.acme.sh/acme.sh --remove -d "$DOMAIN" 2>/dev/null
         rm -rf "$XSB_DIR/cert/$DOMAIN"
-        echo -e "${GREEN}已删除 $DOMAIN 证书并清理 acme.sh 记录${PLAIN}"
+        echo -e "${GREEN}已删除${PLAIN}"
     else
         echo -e "${RED}证书不存在${PLAIN}"
     fi
 }
 
-manage_certs() {
-    echo -e "\n${YELLOW}--- 证书管理 ---${PLAIN}"
-    echo "1) 列出证书"
-    echo "2) 添加证书"
-    echo "3) 删除证书"
-    read -p "选择 [1-3]: " choice
-    case $choice in
-        1) list_certs ;;
-        2) add_cert ;;
-        3) delete_cert ;;
-        *) echo -e "${RED}无效选择${PLAIN}" ;;
-    esac
-}
-
-# -------------------- 保存本机 IP --------------------
-save_ip() {
-    IPV4=$(curl -s4 --max-time 3 ifconfig.me 2>/dev/null)
-    IPV6=$(curl -s6 --max-time 3 ifconfig.me 2>/dev/null)
-    echo "$IPV4" > "$XSB_DIR/conf/ipv4"
-    echo "$IPV6" > "$XSB_DIR/conf/ipv6"
-    export IPV4 IPV6
-}
-
-# -------------------- 入站管理 --------------------
-check_singbox_installed() {
-    if ! command -v sing-box &>/dev/null; then
-        echo -e "${RED}请先安装 Sing-box${PLAIN}"
-        return 1
-    fi
-    return 0
-}
-
-check_port_available() {
-    local port=$1
-    if ss -lntu | grep -q ":$port "; then
-        return 1
-    fi
-    return 0
-}
+# ---------- 入站管理 ----------
+check_port_available() { ! ss -lntu | grep -q ":$1 "; }
 
 list_inbounds() {
     echo -e "${GREEN}当前入站:${PLAIN}"
-    if [[ -d "$XSB_DIR/inbounds" ]]; then
-        for f in "$XSB_DIR"/inbounds/inbound_*.json; do
-            [[ -f "$f" ]] && echo "  $(basename "$f" .json | sed 's/inbound_//')"
-        done
-    else
-        echo "  无"
-    fi
+    for f in "$XSB_DIR"/inbounds/inbound_*.json; do
+        [[ -f "$f" ]] && echo "  $(basename "$f" .json | sed 's/inbound_//')"
+    done
 }
 
 add_inbound() {
-    check_singbox_installed || return 1
-    echo -e "${YELLOW}添加入站协议${PLAIN}"
-    echo "1) VLESS+Reality"
-    echo "2) AnyReality"
-    echo "3) AnyTLS"
-    echo "4) Hysteria2"
-    echo "5) VMess+WSS"
-    echo "6) Shadowsocks 2022"
-    read -p "选择 [1-6]: " proto
-    case $proto in
-        1|2|3|4|5|6) ;;
-        *) echo -e "${RED}无效${PLAIN}" && return 1 ;;
+    if ! command -v sing-box &>/dev/null; then
+        echo -e "${RED}请先安装 Sing-box${PLAIN}" && return 1
+    fi
+
+    INBOUND_TYPE=$(get_or_ask "INBOUND_TYPE" "选择协议 (1=VLESS+Reality,2=AnyReality,3=AnyTLS,4=Hysteria2,5=VMess+WSS,6=Shadowsocks)" "")
+    case $INBOUND_TYPE in
+        1) PROTO="vless-reality" ;;
+        2) PROTO="anytls-reality" ;;
+        3) PROTO="anytls-tls" ;;
+        4) PROTO="hysteria2" ;;
+        5) PROTO="vmess-wss" ;;
+        6) PROTO="shadowsocks" ;;
+        *) echo -e "${RED}无效选择${PLAIN}"; return 1 ;;
     esac
 
     tag="inbound_$(date +%s)"
-    read -p "请输入端口（留空随机）: " PORT
-    if [[ -z "$PORT" ]]; then
+    PORT=$(get_or_ask "PORT" "端口 (0=随机)" "0")
+
+    if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}端口必须是数字${PLAIN}"
+        return 1
+    fi
+
+    if [[ "$PORT" == "0" ]]; then
         while true; do
             PORT=$(shuf -i 10000-65535 -n 1)
             check_port_available "$PORT" && break
         done
-    elif [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}端口必须是数字${PLAIN}"
-        return 1
+    elif ! check_port_available "$PORT"; then
+        echo -e "${YELLOW}端口 $PORT 不可用，将使用随机端口${PLAIN}"
+        while true; do
+            PORT=$(shuf -i 10000-65535 -n 1)
+            check_port_available "$PORT" && break
+        done
+    fi
+
+    if [[ "$PROTO" == "shadowsocks" ]]; then
+        METHOD=$(get_or_ask "METHOD" "加密方法 (1=aes-128-gcm,2=aes-256-gcm,3=chacha20-poly1305)" "2")
+        case $METHOD in
+            1) method="2022-blake3-aes-128-gcm"; key_len=16 ;;
+            2) method="2022-blake3-aes-256-gcm"; key_len=32 ;;
+            3) method="2022-blake3-chacha20-poly1305"; key_len=32 ;;
+            *) method="2022-blake3-aes-256-gcm"; key_len=32 ;;
+        esac
+        PASSWORD=$(get_or_ask "PASSWORD" "Shadowsocks 密钥 (留空自动生成)" "")
+        [[ -z "$PASSWORD" ]] && PASSWORD=$(sing-box generate rand --base64 $key_len)
     else
-        if ! check_port_available "$PORT"; then
-            echo -e "${YELLOW}端口 $PORT 不可用${PLAIN}"
-            read -p "请重新输入（或按回车使用随机端口）: " new_port
-            if [[ -n "$new_port" ]]; then
-                if [[ ! "$new_port" =~ ^[0-9]+$ ]]; then
-                    echo -e "${RED}端口必须是数字，将自动分配随机端口${PLAIN}"
-                    PORT=$(shuf -i 10000-65535 -n 1)
-                    while ! check_port_available "$PORT"; do
-                        PORT=$(shuf -i 10000-65535 -n 1)
-                    done
-                elif check_port_available "$new_port"; then
-                    PORT="$new_port"
-                else
-                    echo -e "${RED}仍不可用，将自动分配随机端口${PLAIN}"
-                    PORT=$(shuf -i 10000-65535 -n 1)
-                    while ! check_port_available "$PORT"; do
-                        PORT=$(shuf -i 10000-65535 -n 1)
-                    done
-                fi
-            else
-                while true; do
-                    PORT=$(shuf -i 10000-65535 -n 1)
-                    check_port_available "$PORT" && break
-                done
+        UUID=$(get_or_ask "UUID" "UUID (留空自动生成)" "")
+        [[ -z "$UUID" ]] && UUID=$(sing-box generate uuid)
+    fi
+
+    case $PROTO in
+        vless-reality|anytls-reality)
+            REALITY_SERVER_NAME=$(get_or_ask "REALITY_SERVER_NAME" "Reality 伪装域名" "www.apple.com")
+            KEYPAIR=$(sing-box generate reality-keypair)
+            PRIVATE_KEY=$(echo "$KEYPAIR" | awk '/PrivateKey/ {print $2}' | tr -d '"')
+            PUBLIC_KEY=$(echo "$KEYPAIR" | awk '/PublicKey/ {print $2}' | tr -d '"')
+            SHORT_ID=$(sing-box generate rand --hex 4)
+            echo "$PRIVATE_KEY" > "$XSB_DIR/inbounds/inbound_${tag}_reality_private_key"
+            echo "$PUBLIC_KEY" > "$XSB_DIR/inbounds/inbound_${tag}_reality_public_key"
+            echo "$SHORT_ID" > "$XSB_DIR/inbounds/inbound_${tag}_reality_short_id"
+            chmod 600 "$XSB_DIR/inbounds/inbound_${tag}"_*
+            ;;
+        anytls-tls|hysteria2|vmess-wss)
+            list_certs
+            CERT_DOMAIN=$(get_or_ask "CERT_DOMAIN" "证书域名" "")
+            if [[ ! -d "$XSB_DIR/cert/$CERT_DOMAIN" ]]; then
+                echo -e "${RED}证书不存在${PLAIN}"; return 1
             fi
-        fi
-    fi
+            ;;
+    esac
 
-    if [[ -f "$XSB_DIR/conf/uuid" ]]; then
-        UUID=$(cat "$XSB_DIR/conf/uuid")
-    else
-        UUID=$(sing-box generate uuid 2>/dev/null)
-        echo "$UUID" > "$XSB_DIR/conf/uuid"
-        chmod 600 "$XSB_DIR/conf/uuid"
-    fi
-
-    REALITY_SERVER_NAME=""
-    PRIVATE_KEY=""
-    PUBLIC_KEY=""
-    SHORT_ID=""
-    if [[ $proto -eq 1 || $proto -eq 2 ]]; then
-        read -p "Reality 伪装域名（默认 www.apple.com）: " REALITY_SERVER_NAME
-        REALITY_SERVER_NAME=${REALITY_SERVER_NAME:-www.apple.com}
-        KEYPAIR=$(sing-box generate reality-keypair)
-        PRIVATE_KEY=$(echo "$KEYPAIR" | awk '/PrivateKey/ {print $2}' | tr -d '"')
-        PUBLIC_KEY=$(echo "$KEYPAIR" | awk '/PublicKey/ {print $2}' | tr -d '"')
-        SHORT_ID=$(sing-box generate rand --hex 4)
-        echo "$PRIVATE_KEY" > "$XSB_DIR/inbounds/inbound_${tag}_reality_private_key"
-        echo "$PUBLIC_KEY" > "$XSB_DIR/inbounds/inbound_${tag}_reality_public_key"
-        echo "$SHORT_ID" > "$XSB_DIR/inbounds/inbound_${tag}_reality_short_id"
-        chmod 600 "$XSB_DIR/inbounds/inbound_${tag}_reality_private_key" \
-                  "$XSB_DIR/inbounds/inbound_${tag}_reality_public_key" \
-                  "$XSB_DIR/inbounds/inbound_${tag}_reality_short_id"
-    fi
-
-    CERT_DOMAIN=""
-    if [[ $proto -eq 3 || $proto -eq 4 || $proto -eq 5 ]]; then
-        list_certs
-        read -p "请选择证书域名（输入域名）: " CERT_DOMAIN
-        if [[ ! -d "$XSB_DIR/cert/$CERT_DOMAIN" ]]; then
-            echo -e "${RED}证书不存在，请先添加证书${PLAIN}" && return 1
-        fi
-    fi
-
-    case $proto in
-        1) # VLESS+Reality
-            jq -n \
-                --arg type "vless" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg uuid "$UUID" \
-                --arg sni "$REALITY_SERVER_NAME" \
-                --arg privkey "$PRIVATE_KEY" \
-                --arg shortid "$SHORT_ID" \
+    # 构建 JSON
+    case $PROTO in
+        vless-reality)
+            jq -n --arg type "vless" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg uuid "$UUID" --arg sni "$REALITY_SERVER_NAME" --arg privkey "$PRIVATE_KEY" --arg shortid "$SHORT_ID" \
                 '{
-                    type: $type,
-                    tag: $tag,
-                    listen: $listen,
-                    listen_port: $port,
+                    type: $type, tag: $tag, listen: $listen, listen_port: $port,
                     users: [ { uuid: $uuid, flow: "xtls-rprx-vision" } ],
-                    tls: {
-                        enabled: true,
-                        server_name: $sni,
-                        reality: {
-                            enabled: true,
-                            handshake: { server: $sni, server_port: 443 },
-                            private_key: $privkey,
-                            short_id: [ $shortid ]
-                        }
-                    }
+                    tls: { enabled: true, server_name: $sni, reality: { enabled: true, handshake: { server: $sni, server_port: 443 }, private_key: $privkey, short_id: [ $shortid ] } }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
-        2) # AnyTLS+Reality
-            jq -n \
-                --arg type "anytls" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg uuid "$UUID" \
-                --arg sni "$REALITY_SERVER_NAME" \
-                --arg privkey "$PRIVATE_KEY" \
-                --arg shortid "$SHORT_ID" \
+        anytls-reality)
+            jq -n --arg type "anytls" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg password "$UUID" --arg sni "$REALITY_SERVER_NAME" --arg privkey "$PRIVATE_KEY" --arg shortid "$SHORT_ID" \
                 '{
-                    type: $type,
-                    tag: $tag,
-                    listen: $listen,
-                    listen_port: $port,
-                    users: [ { password: $uuid } ],
-                    tls: {
-                        enabled: true,
-                        server_name: $sni,
-                        reality: {
-                            enabled: true,
-                            handshake: { server: $sni, server_port: 443 },
-                            private_key: $privkey,
-                            short_id: [ $shortid ]
-                        }
-                    }
+                    type: $type, tag: $tag, listen: $listen, listen_port: $port,
+                    users: [ { password: $password } ],
+                    tls: { enabled: true, server_name: $sni, reality: { enabled: true, handshake: { server: $sni, server_port: 443 }, private_key: $privkey, short_id: [ $shortid ] } }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
-        3) # AnyTLS+TLS
-            jq -n \
-                --arg type "anytls" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg uuid "$UUID" \
-                --arg domain "$CERT_DOMAIN" \
+        anytls-tls)
+            jq -n --arg type "anytls" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg password "$UUID" --arg domain "$CERT_DOMAIN" \
                 --arg cert_path "$XSB_DIR/cert/$CERT_DOMAIN/cert.crt" \
                 --arg key_path "$XSB_DIR/cert/$CERT_DOMAIN/private.key" \
                 '{
-                    type: $type,
-                    tag: $tag,
-                    listen: $listen,
-                    listen_port: $port,
-                    users: [ { password: $uuid } ],
-                    tls: {
-                        enabled: true,
-                        server_name: $domain,
-                        certificate_path: $cert_path,
-                        key_path: $key_path
-                    }
+                    type: $type, tag: $tag, listen: $listen, listen_port: $port,
+                    users: [ { password: $password } ],
+                    tls: { enabled: true, server_name: $domain, certificate_path: $cert_path, key_path: $key_path }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
-        4) # Hysteria2
-            read -p "请输入起始端口（默认 60000）: " HOP_START
-            HOP_START=${HOP_START:-60000}
-            read -p "请输入结束端口（默认 65000）: " HOP_END
-            HOP_END=${HOP_END:-65000}
-            echo "${HOP_START}-${HOP_END}" > "$XSB_DIR/inbounds/inbound_${tag}.hop"
-            chmod 600 "$XSB_DIR/inbounds/inbound_${tag}.hop"
-
-            jq -n \
-                --arg type "hysteria2" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg uuid "$UUID" \
-                --arg domain "$CERT_DOMAIN" \
+        hysteria2)
+            jq -n --arg type "hysteria2" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg password "$UUID" --arg domain "$CERT_DOMAIN" \
                 --arg cert_path "$XSB_DIR/cert/$CERT_DOMAIN/cert.crt" \
                 --arg key_path "$XSB_DIR/cert/$CERT_DOMAIN/private.key" \
                 '{
-                    type: $type,
-                    tag: $tag,
-                    listen: $listen,
-                    listen_port: $port,
-                    users: [ { password: $uuid } ],
+                    type: $type, tag: $tag, listen: $listen, listen_port: $port,
+                    users: [ { password: $password } ],
                     ignore_client_bandwidth: false,
-                    tls: {
-                        enabled: true,
-                        server_name: $domain,
-                        certificate_path: $cert_path,
-                        key_path: $key_path
-                    }
+                    tls: { enabled: true, server_name: $domain, certificate_path: $cert_path, key_path: $key_path }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
 
             install_brutal
-            setup_hy2_hop "$PORT" "$HOP_START" "$HOP_END" "$tag"
+            ENABLE_HOP=$(get_or_ask "ENABLE_HOP" "是否启用端口跳跃？(y/n)" "n")
+            if [[ "$ENABLE_HOP" == "y" || "$ENABLE_HOP" == "Y" ]]; then
+                HY2_HOP_START=$(get_or_ask "HY2_HOP_START" "起始端口" "60000")
+                HY2_HOP_END=$(get_or_ask "HY2_HOP_END" "结束端口" "65000")
+                echo "${HY2_HOP_START}-${HY2_HOP_END}" > "$XSB_DIR/inbounds/inbound_${tag}.hop"
+                chmod 600 "$XSB_DIR/inbounds/inbound_${tag}.hop"
+                setup_hy2_hop "$PORT" "$HY2_HOP_START" "$HY2_HOP_END" "$tag"
+            fi
             ;;
-        5) # VMess+WSS
-            WS_PATH="/vm-${UUID}"
-            jq -n \
-                --arg type "vmess" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg uuid "$UUID" \
-                --arg domain "$CERT_DOMAIN" \
-                --arg path "$WS_PATH" \
+        vmess-wss)
+            WS_PATH=$(get_or_ask "WS_PATH" "WebSocket 路径" "/vm-${UUID}")
+            jq -n --arg type "vmess" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg uuid "$UUID" --arg domain "$CERT_DOMAIN" --arg path "$WS_PATH" \
                 --arg cert_path "$XSB_DIR/cert/$CERT_DOMAIN/cert.crt" \
                 --arg key_path "$XSB_DIR/cert/$CERT_DOMAIN/private.key" \
                 '{
-                    type: $type,
-                    tag: $tag,
-                    listen: $listen,
-                    listen_port: $port,
+                    type: $type, tag: $tag, listen: $listen, listen_port: $port,
                     users: [ { uuid: $uuid, alterId: 0 } ],
-                    transport: {
-                        type: "ws",
-                        path: $path,
-                        headers: { Host: $domain }
-                    },
-                    tls: {
-                        enabled: true,
-                        server_name: $domain,
-                        certificate_path: $cert_path,
-                        key_path: $key_path
-                    }
+                    transport: { type: "ws", path: $path, headers: { Host: $domain } },
+                    tls: { enabled: true, server_name: $domain, certificate_path: $cert_path, key_path: $key_path }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
-        6) # Shadowsocks 2022
-            echo "选择加密方法:"
-            echo "1) 2022-blake3-aes-128-gcm"
-            echo "2) 2022-blake3-aes-256-gcm"
-            echo "3) 2022-blake3-chacha20-poly1305"
-            read -p "选择 [1-3]: " ss_method_choice
-            case $ss_method_choice in
-                1) method="2022-blake3-aes-128-gcm"; bytes=16 ;;
-                2) method="2022-blake3-aes-256-gcm"; bytes=32 ;;
-                3) method="2022-blake3-chacha20-poly1305"; bytes=32 ;;
-                *) echo -e "${YELLOW}无效选择，使用默认 256-gcm${PLAIN}"; method="2022-blake3-aes-256-gcm"; bytes=32 ;;
-            esac
-            password=$(openssl rand -base64 $bytes | tr -d '\n')
-            read -p "网络类型 (tcp/udp/both，默认 both): " network
-            network=${network:-"tcp,udp"}
-            jq -n \
-                --arg type "shadowsocks" \
-                --arg tag "$tag" \
-                --arg listen "::" \
-                --argjson port "$PORT" \
-                --arg method "$method" \
-                --arg password "$password" \
-                --arg network "$network" \
-                '{type: $type, tag: $tag, listen: $listen, listen_port: $port, method: $method, password: $password, network: $network}' \
+        shadowsocks)
+            jq -n --arg type "shadowsocks" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
+                --arg method "$method" --arg password "$PASSWORD" \
+                '{type: $type, tag: $tag, listen: $listen, listen_port: $port, method: $method, password: $password}' \
                 > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
     esac
+
     echo -e "${GREEN}入站 $tag 添加成功 (端口 $PORT)${PLAIN}"
 }
 
 delete_inbound() {
     list_inbounds
-    read -p "请输入要删除的入站标签: " tag
+    tag=$(get_or_ask "DELETE_INBOUND_TAG" "请输入要删除的入站标签" "")
     if [[ -f "$XSB_DIR/inbounds/inbound_${tag}.json" ]]; then
         rm -f "$XSB_DIR/inbounds/inbound_${tag}.json"
-        if [[ -f "$XSB_DIR/inbounds/inbound_${tag}.hop" ]]; then
-            rm -f "$XSB_DIR/inbounds/inbound_${tag}.hop"
-            cleanup_hy2_hop "$tag"
-        fi
-        rm -f "$XSB_DIR/inbounds/inbound_${tag}_reality_private_key" \
-              "$XSB_DIR/inbounds/inbound_${tag}_reality_public_key" \
-              "$XSB_DIR/inbounds/inbound_${tag}_reality_short_id"
+        [[ -f "$XSB_DIR/inbounds/inbound_${tag}.hop" ]] && { rm -f "$XSB_DIR/inbounds/inbound_${tag}.hop"; cleanup_hy2_hop "$tag"; }
+        rm -f "$XSB_DIR/inbounds/inbound_${tag}"_reality_*
         echo -e "${GREEN}已删除${PLAIN}"
     else
         echo -e "${RED}不存在${PLAIN}"
     fi
 }
 
-manage_inbounds() {
-    echo -e "\n${YELLOW}--- 入站管理 ---${PLAIN}"
-    echo "1) 列出入站"
-    echo "2) 添加入站"
-    echo "3) 删除入站"
-    read -p "选择 [1-3]: " choice
-    case $choice in
-        1) list_inbounds ;;
-        2) add_inbound ;;
-        3) delete_inbound ;;
-        *) echo -e "${RED}无效${PLAIN}" ;;
-    esac
-}
-
+# ---------- Brutal & 端口跳跃 ----------
 install_brutal() {
     if lsmod | grep -q brutal; then
-        echo -e "${GREEN}Brutal 已加载${PLAIN}" && return 0
+        echo -e "${GREEN}Brutal 已加载${PLAIN}"
+    else
+        echo -e "${GREEN}安装 tcp-brutal...${PLAIN}"
+        bash <(curl -fsSL https://raw.githubusercontent.com/apernet/tcp-brutal/refs/heads/master/scripts/install_dkms.sh)
     fi
-    echo -e "${GREEN}安装 tcp-brutal...${PLAIN}"
-    bash <(curl -fsSL https://raw.githubusercontent.com/apernet/tcp-brutal/refs/heads/master/scripts/install_dkms.sh)
 }
 
 setup_hy2_hop() {
-    local hy2_port=$1
-    local hop_start=$2
-    local hop_end=$3
-    local tag=$4
+    local hy2_port=$1 hop_start=$2 hop_end=$3 tag=$4
     echo -e "${GREEN}配置 Hysteria2 端口跳跃 (${hop_start}-${hop_end}) -> ${hy2_port}${PLAIN}"
     iptables -t nat -A PREROUTING -p udp --dport ${hop_start}:${hop_end} -j REDIRECT --to-ports :${hy2_port} -m comment --comment "xsb_hy2_${tag}"
     ip6tables -t nat -A PREROUTING -p udp --dport ${hop_start}:${hop_end} -j REDIRECT --to-ports :${hy2_port} -m comment --comment "xsb_hy2_${tag}"
@@ -636,27 +399,19 @@ cleanup_hy2_hop() {
 persist_iptables() {
     if command -v netfilter-persistent >/dev/null 2>&1; then
         netfilter-persistent save && return 0
-        echo -e "${YELLOW}netfilter-persistent 保存失败，尝试其他方式${PLAIN}"
     fi
-
     if ! command -v iptables-save >/dev/null 2>&1; then
-        echo -e "${YELLOW}未找到 iptables-save，跳过规则持久化${PLAIN}"
+        echo -e "${YELLOW}未找到 iptables-save，跳过持久化${PLAIN}"
         return 1
     fi
-
-    local save_dir=""
-    local v4_file=""
-    local v6_file=""
-
+    local v4_file v6_file
     if [[ -d /etc/iptables ]]; then
-        save_dir="/etc/iptables"
-        v4_file="$save_dir/rules.v4"
-        v6_file="$save_dir/rules.v6"
+        v4_file="/etc/iptables/rules.v4"; v6_file="/etc/iptables/rules.v6"
     elif [[ -d /etc/sysconfig ]]; then
-        save_dir="/etc/sysconfig"
-        v4_file="$save_dir/iptables"
-        v6_file="$save_dir/ip6tables"
+        v4_file="/etc/sysconfig/iptables"; v6_file="/etc/sysconfig/ip6tables"
     elif [[ -d /etc/local.d ]]; then
+        mkdir -p /etc/iptables
+        v4_file="/etc/iptables/rules.v4"; v6_file="/etc/iptables/rules.v6"
         cat > /etc/local.d/iptables-restore.start <<EOF
 #!/bin/sh
 iptables-restore < /etc/iptables/rules.v4 2>/dev/null
@@ -664,183 +419,108 @@ ip6tables-restore < /etc/iptables/rules.v6 2>/dev/null
 EOF
         chmod +x /etc/local.d/iptables-restore.start
         rc-update add local default 2>/dev/null
-        save_dir="/etc/iptables"
-        v4_file="$save_dir/rules.v4"
-        v6_file="$save_dir/rules.v6"
-        mkdir -p "$save_dir"
     else
-        echo -e "${RED}规则持久化失败，无法确定保存目录${PLAIN}"
+        echo -e "${RED}无法持久化 iptables 规则${PLAIN}"
         return 1
     fi
-
-    local save_ok=true
-    if ! iptables-save > "$v4_file" 2>/dev/null; then
-        echo -e "${YELLOW}保存规则到 $v4_file 失败${PLAIN}"
-        save_ok=false
-    fi
-    if ! ip6tables-save > "$v6_file" 2>/dev/null; then
-        echo -e "${YELLOW}保存规则到 $v6_file 失败${PLAIN}"
-        save_ok=false
-    fi
-
-    if $save_ok; then
-        echo -e "${GREEN}iptables 规则已持久化到 $save_dir${PLAIN}"
-        return 0
-    else
-        return 1
-    fi
+    iptables-save > "$v4_file" && ip6tables-save > "$v6_file" && echo -e "${GREEN}规则已持久化${PLAIN}"
 }
 
-# -------------------- 出站管理 --------------------
+# ---------- 出站管理 ----------
 list_outbounds() {
     echo -e "${GREEN}当前出站:${PLAIN}"
-    if [[ -d "$XSB_DIR/outbounds" ]]; then
-        for f in "$XSB_DIR"/outbounds/outbound_*.json "$XSB_DIR"/outbounds/endpoint_*.json; do
-            [[ -f "$f" ]] && echo "  $(basename "$f" .json | sed 's/^outbound_//;s/^endpoint_//')"
-        done
-    else
-        echo "  无"
-    fi
+    for f in "$XSB_DIR"/outbounds/outbound_*.json "$XSB_DIR"/outbounds/endpoint_*.json; do
+        [[ -f "$f" ]] && echo "  $(basename "$f" .json | sed 's/^outbound_//;s/^endpoint_//')"
+    done
 }
 
 add_outbound() {
-    echo -e "${YELLOW}添加出站${PLAIN}"
-    echo "1) SOCKS5"
-    echo "2) WARP (WireGuard)"
-    read -p "选择 [1-2]: " choice
+    OUTBOUND_TYPE=$(get_or_ask "OUTBOUND_TYPE" "出站类型 (1=SOCKS5, 2=WARP)" "")
     tag="outbound_$(date +%s)"
-    case $choice in
-        1) # SOCKS5
-            read -p "服务器地址（默认 127.0.0.1）: " server
-            server=${server:-127.0.0.1}
-            read -p "端口（默认 1080）: " port
-            port=${port:-1080}
-            read -p "用户名（可选）: " user
-            read -p "密码（可选）: " pass
-            jq -n \
-                --arg type "socks" \
-                --arg tag "$tag" \
-                --arg server "$server" \
-                --argjson port "$port" \
-                --arg user "$user" \
-                --arg pass "$pass" \
-                '{
-                    type: $type,
-                    tag: $tag,
-                    server: $server,
-                    server_port: $port,
-                    username: $user,
-                    password: $pass
-                }' > "$XSB_DIR/outbounds/outbound_${tag}.json"
-            add_route_rule "$tag" '{"ip_cidr":["0.0.0.0/0","::/0"]}'
+    OUTBOUND_MATCH=$(get_or_ask "OUTBOUND_MATCH" "路由匹配规则 (JSON)" '{"ip_cidr":["0.0.0.0/0","::/0"]}')
+    case $OUTBOUND_TYPE in
+        1)
+            server=$(get_or_ask "SOCKS5_SERVER" "SOCKS5 服务器" "127.0.0.1")
+            port=$(get_or_ask "SOCKS5_PORT" "端口" "1080")
+            user=$(get_or_ask "SOCKS5_USER" "用户名 (可选)" "")
+            pass=$(get_or_ask "SOCKS5_PASS" "密码 (可选)" "")
+            jq -n --arg type "socks" --arg tag "$tag" --arg server "$server" --argjson port "$port" \
+                --arg user "$user" --arg pass "$pass" \
+                '{type: $type, tag: $tag, server: $server, server_port: $port, username: $user, password: $pass}' \
+                > "$XSB_DIR/outbounds/outbound_${tag}.json"
+            add_route_rule "$tag" "$OUTBOUND_MATCH"
             ;;
-        2) # WARP
+        2)
             echo -e "${GREEN}获取 WARP 配置...${PLAIN}"
             WARP_DATA=$(curl -s --max-time 5 https://warp.xijp.eu.org)
             if [[ -z "$WARP_DATA" ]]; then
-                WARP_PRIVATE_KEY="52cuYFgCJXp0LAq7+nWJIbCXXgU9eGggOc+Hlfz5u6A="
-                WARP_IPV6="2606:4700:110:8d8d:1845:c39f:2dd5:a03a"
-                WARP_RESERVED="[215, 69, 233]"
+                echo -e "${RED}无法自动获取 WARP 配置${PLAIN}"
+                WARP_PRIVATE_KEY=$(get_or_ask "WARP_PRIVATE_KEY" "请输入 WARP Private Key" "")
+                WARP_IPV6=$(get_or_ask "WARP_IPV6" "请输入 WARP IPv6 地址（不含 /128）" "")
+                WARP_RESERVED=$(get_or_ask "WARP_RESERVED" "请输入 WARP reserved（JSON 数组，如 [1,2,3]）" "")
+                if [[ -z "$WARP_PRIVATE_KEY" || -z "$WARP_IPV6" || -z "$WARP_RESERVED" ]]; then
+                    echo -e "${RED}缺少必要 WARP 参数，请配置后再试${PLAIN}"
+                    return 1
+                fi
             else
                 WARP_PRIVATE_KEY=$(echo "$WARP_DATA" | grep Private_key | awk -F'：' '{print $2}' | xargs)
                 WARP_IPV6=$(echo "$WARP_DATA" | grep IPV6 | awk -F'：' '{print $2}' | xargs)
                 WARP_RESERVED=$(echo "$WARP_DATA" | grep reserved | awk -F'：' '{print $2}' | xargs)
             fi
-            if curl -s4 --max-time 3 ifconfig.me >/dev/null 2>&1; then
-                WARP_PEER_ADDR="162.159.192.1"
-            else
-                WARP_PEER_ADDR="[2606:4700:d0::a29f:c001]"
-            fi
-
-            jq -n \
-                --arg type "wireguard" \
-                --arg tag "$tag" \
-                --arg addr_v4 "172.16.0.2/32" \
-                --arg addr_v6 "$WARP_IPV6/128" \
-                --arg privkey "$WARP_PRIVATE_KEY" \
-                --arg peer_addr "$WARP_PEER_ADDR" \
+            curl -s4 --max-time 3 ifconfig.me >/dev/null 2>&1 && WARP_PEER_ADDR="162.159.192.1" || WARP_PEER_ADDR="[2606:4700:d0::a29f:c001]"
+            jq -n --arg type "wireguard" --arg tag "$tag" \
+                --arg addr_v4 "172.16.0.2/32" --arg addr_v6 "$WARP_IPV6/128" \
+                --arg privkey "$WARP_PRIVATE_KEY" --arg peer_addr "$WARP_PEER_ADDR" \
                 --argjson reserved "$WARP_RESERVED" \
                 '{
-                    type: $type,
-                    tag: $tag,
+                    type: $type, tag: $tag,
                     address: [ $addr_v4, $addr_v6 ],
                     private_key: $privkey,
-                    peers: [
-                        {
-                            address: $peer_addr,
-                            port: 2408,
-                            public_key: "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                            allowed_ips: ["0.0.0.0/0", "::/0"],
-                            reserved: $reserved
-                        }
-                    ]
+                    peers: [ { address: $peer_addr, port: 2408, public_key: "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=", allowed_ips: ["0.0.0.0/0", "::/0"], reserved: $reserved } ]
                 }' > "$XSB_DIR/outbounds/endpoint_${tag}.json"
-
-            add_route_rule "$tag" '{"domain_keyword":["google","gmail","youtube","gstatic","ytimg"]}'
+            add_route_rule "$tag" "$OUTBOUND_MATCH"
             ;;
-        *)
-            echo -e "${RED}无效${PLAIN}" && return 1
+        *) echo -e "${RED}无效选择${PLAIN}"; return 1 ;;
     esac
-    echo -e "${GREEN}出站 $tag 添加成功，并已添加路由规则${PLAIN}"
+    echo -e "${GREEN}出站 $tag 添加成功${PLAIN}"
 }
 
 delete_outbound() {
     list_outbounds
-    read -p "请输入要删除的出站标签: " tag
-    if [[ -f "$XSB_DIR/outbounds/outbound_${tag}.json" ]] || [[ -f "$XSB_DIR/outbounds/endpoint_${tag}.json" ]]; then
-        rm -f "$XSB_DIR/outbounds/outbound_${tag}.json" "$XSB_DIR/outbounds/endpoint_${tag}.json"
-        rm -f "$XSB_DIR/conf/routes/route_${tag}.json"
-        echo -e "${GREEN}已删除${PLAIN}"
-    else
-        echo -e "${RED}不存在${PLAIN}"
-    fi
-}
-
-manage_outbounds() {
-    echo -e "\n${YELLOW}--- 出站管理 ---${PLAIN}"
-    echo "1) 列出出站"
-    echo "2) 添加出站"
-    echo "3) 删除出站"
-    read -p "选择 [1-3]: " choice
-    case $choice in
-        1) list_outbounds ;;
-        2) add_outbound ;;
-        3) delete_outbound ;;
-        *) echo -e "${RED}无效${PLAIN}" ;;
-    esac
+    tag=$(get_or_ask "DELETE_OUTBOUND_TAG" "请输入要删除的出站标签" "")
+    rm -f "$XSB_DIR/outbounds/outbound_${tag}.json" "$XSB_DIR/outbounds/endpoint_${tag}.json" "$XSB_DIR/conf/routes/route_${tag}.json"
+    echo -e "${GREEN}已删除${PLAIN}"
 }
 
 add_route_rule() {
-    local outbound_tag=$1
-    local match_spec=$2
-
     mkdir -p "$XSB_DIR/conf/routes"
+    jq -n --arg outbound "$1" --argjson spec "$2" '$spec + { outbound: $outbound }' > "$XSB_DIR/conf/routes/route_${1}.json"
+}
 
-    jq -n \
-        --arg outbound "$outbound_tag" \
-        --argjson spec "$match_spec" \
-        '$spec + { outbound: $outbound }' \
-        > "$XSB_DIR/conf/routes/route_${outbound_tag}.json"
+# ---------- Cloudflare 配置 ----------
+cf_api_request() {
+    local method=$1 url=$2 data=$3
+    CF_Key=$(get_or_ask "CF_Key" "Cloudflare API Key" "")
+    CF_Email=$(get_or_ask "CF_Email" "Cloudflare Email" "")
+    if [[ -z "$CF_Key" || -z "$CF_Email" ]]; then
+        echo -e "${RED}需要 Cloudflare 凭证 (CF_Key, CF_Email)${PLAIN}"
+        return 1
+    fi
+    headers=(-H "X-Auth-Email: $CF_Email" -H "X-Auth-Key: $CF_Key" -H "Content-Type: application/json")
+    [[ -n "$data" ]] && curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}" --data "$data" \
+        || curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}"
 }
 
 cf_delete_record() {
-    local domain=$1
-    local zone_id=$2
+    local domain=$1 zone_id=$2
     local resp=$(cf_api_request "GET" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$domain")
     echo "$resp" | jq -r --arg domain "$domain" '.result[] | select(.type=="A" or .type=="AAAA" or .type=="CNAME") | select(.name==$domain) | .id' | while read -r rec_id; do
-        if [[ -n "$rec_id" ]]; then
-            cf_api_request "DELETE" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$rec_id" > /dev/null
-            echo "已删除记录: $rec_id"
-        fi
+        [[ -n "$rec_id" ]] && cf_api_request "DELETE" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$rec_id" > /dev/null && echo "已删除记录: $rec_id"
     done
 }
 
 cf_add_record() {
-    local domain=$1
-    local type=$2
-    local content=$3
-    local zone_id=$4
-    local proxied="${5:-true}"
+    local domain=$1 type=$2 content=$3 zone_id=$4 proxied="${5:-true}"
     local data=$(jq -n --arg type "$type" --arg name "$domain" --arg content "$content" --argjson proxied "$proxied" \
         '{type: $type, name: $name, content: $content, ttl: 120, proxied: $proxied}')
     cf_api_request "POST" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" "$data" > /dev/null
@@ -848,201 +528,78 @@ cf_add_record() {
 }
 
 cf_dns() {
-    echo -e "${YELLOW}配置 Cloudflare DNS 记录 (A/AAAA) 指向本机 IP${PLAIN}"
-    ensure_cf_creds || return 1
-    if [[ -z "$ZONE_ID" || -z "$DOMAIN" ]]; then
-        echo -e "${RED}需要 ZONE_ID 和 DOMAIN，请在 $XSB_DIR/conf/cf_creds 中填写${PLAIN}"
-        return 1
-    fi
-
-    save_ip
-    ipv4=$(cat "$XSB_DIR/conf/ipv4" 2>/dev/null)
-    ipv6=$(cat "$XSB_DIR/conf/ipv6" 2>/dev/null)
-
+    echo -e "${YELLOW}配置 Cloudflare DNS 记录${PLAIN}"
+    DOMAIN=$(get_or_ask "DOMAIN" "主域名" "")
+    ZONE_ID=$(get_or_ask "ZONE_ID" "Zone ID" "")
+    [[ -z "$DOMAIN" || -z "$ZONE_ID" ]] && { echo -e "${RED}需要 DOMAIN 和 ZONE_ID${PLAIN}"; return 1; }
+    ipv4=$(curl -s4 --max-time 3 ifconfig.me 2>/dev/null)
+    ipv6=$(curl -s6 --max-time 3 ifconfig.me 2>/dev/null)
     echo -e "${GREEN}当前 IP: IPv4=${ipv4:-无}, IPv6=${ipv6:-无}${PLAIN}"
-    read -p "是否清除现有 A/AAAA 记录并添加新记录？ [Y/n]: " confirm
+    read -p "是否清除现有记录并添加新记录？[Y/n]: " confirm
     [[ "$confirm" =~ [Nn] ]] && return 0
-
     cf_delete_record "$DOMAIN" "$ZONE_ID"
-
-    if [[ -n "$ipv4" ]]; then
-        cf_add_record "$DOMAIN" "A" "$ipv4" "$ZONE_ID" "true"
-    fi
-    if [[ -n "$ipv6" ]]; then
-        cf_add_record "$DOMAIN" "AAAA" "$ipv6" "$ZONE_ID" "true"
-    fi
+    [[ -n "$ipv4" ]] && cf_add_record "$DOMAIN" "A" "$ipv4" "$ZONE_ID" "true"
+    [[ -n "$ipv6" ]] && cf_add_record "$DOMAIN" "AAAA" "$ipv6" "$ZONE_ID" "true"
     echo -e "${GREEN}DNS 记录更新完成${PLAIN}"
-}
-
-select_vmess_inbound() {
-    local domain="$1"
-    local tags=() ports=() paths=()
-    if [[ -d "$XSB_DIR/inbounds" ]]; then
-        for f in "$XSB_DIR"/inbounds/inbound_*.json; do
-            [[ -f "$f" ]] || continue
-            if jq -e '.type == "vmess"' "$f" >/dev/null 2>&1; then
-                host=$(jq -r '.transport.headers.Host' "$f")
-                if [[ "$host" == "$domain" ]]; then
-                    tag=$(basename "$f" .json | sed 's/inbound_//')
-                    port=$(jq -r '.listen_port' "$f")
-                    path=$(jq -r '.transport.path' "$f")
-                    tags+=("$tag")
-                    ports+=("$port")
-                    paths+=("$path")
-                fi
-            fi
-        done
-    fi
-    local count=${#tags[@]}
-    if [[ $count -eq 0 ]]; then
-        echo -e "${RED}未找到 Host 为 $domain 的 VMess 入站${PLAIN}" >&2
-        return 1
-    elif [[ $count -eq 1 ]]; then
-        echo "${tags[0]}|${ports[0]}|${paths[0]}"
-        return 0
-    else
-        echo -e "${YELLOW}找到多个 Host 为 $domain 的 VMess 入站：${PLAIN}" >&2
-        for i in "${!tags[@]}"; do
-            echo "  $((i+1))) tag=${tags[$i]}, 端口=${ports[$i]}, 路径=${paths[$i]}" >&2
-        done
-        echo -n "请选择 (输入序号): " >&2
-        read -r choice
-        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= count )); then
-            local idx=$((choice-1))
-            echo "${tags[$idx]}|${ports[$idx]}|${paths[$idx]}"
-            return 0
-        else
-            echo -e "${RED}无效选择${PLAIN}" >&2
-            return 1
-        fi
-    fi
 }
 
 cf_origin_rule() {
     echo -e "${YELLOW}配置 Origin Rule${PLAIN}"
-    
-    ensure_cf_creds || return 1
-    if [[ -z "$ZONE_ID" || -z "$DOMAIN" ]]; then
-        echo -e "${RED}Origin Rule 需要 ZONE_ID 和 DOMAIN，请在 $XSB_DIR/conf/cf_creds 中填写${PLAIN}"
-        return 1
-    fi
-
-    local vmess_info
-    vmess_info=$(select_vmess_inbound "$DOMAIN") || return 1
-    IFS='|' read -r vmess_tag PORT WS_PATH <<< "$vmess_info"
-
-    echo -e "${GREEN}清除现有 DNS 记录...${PLAIN}"
-    cf_delete_record "$DOMAIN" "$ZONE_ID"
-
-    save_ip
-    ipv4=$(cat "$XSB_DIR/conf/ipv4" 2>/dev/null)
-    ipv6=$(cat "$XSB_DIR/conf/ipv6" 2>/dev/null)
-    if [[ -n "$ipv4" ]]; then
-        cf_add_record "$DOMAIN" "A" "$ipv4" "$ZONE_ID" "true" 
-    fi
-    if [[ -n "$ipv6" ]]; then
-        cf_add_record "$DOMAIN" "AAAA" "$ipv6" "$ZONE_ID" "true"
-    fi
-    echo -e "${GREEN}DNS 记录已更新（A/AAAA）${PLAIN}"
-
+    DOMAIN=$(get_or_ask "DOMAIN" "主域名" "")
+    ZONE_ID=$(get_or_ask "ZONE_ID" "Zone ID" "")
+    WS_PATH=$(get_or_ask "WS_PATH" "WebSocket 路径" "")
+    PORT=$(get_or_ask "PORT" "目标端口" "")
+    [[ -z "$DOMAIN" || -z "$ZONE_ID" || -z "$WS_PATH" || -z "$PORT" ]] && { echo -e "${RED}缺少必要参数${PLAIN}"; return 1; }
     RULE_DATA=$(cat <<EOF
-{
-  "targets": [
-    { "target": "hostname", "value": "$DOMAIN" },
-    { "target": "path", "value": "$WS_PATH" }
-  ],
-  "actions": [
-    { "target": "port", "value": $PORT }
-  ]
-}
+{ "targets": [ { "target": "hostname", "value": "$DOMAIN" }, { "target": "path", "value": "$WS_PATH" } ], "actions": [ { "target": "port", "value": $PORT } ] }
 EOF
 )
     RESP=$(cf_api_request "POST" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rules/origin_rules" "$RULE_DATA")
     if echo "$RESP" | jq -e '.success == true' >/dev/null; then
         echo -e "${GREEN}Origin Rule 已配置 (路径 $WS_PATH -> 端口 $PORT)${PLAIN}"
     else
-        echo -e "${RED}Origin Rule 配置失败: $(echo "$RESP" | jq -r '.errors[0].message')${PLAIN}"
+        echo -e "${RED}配置失败: $(echo "$RESP" | jq -r '.errors[0].message')${PLAIN}"
     fi
 }
 
 cf_argo() {
-    echo -e "${YELLOW}配置 Cloudflare Argo 固定隧道${PLAIN}"
-
+    echo -e "${YELLOW}配置 Argo 固定隧道${PLAIN}"
     if [[ ! -f "$XSB_DIR/bin/cloudflared" ]]; then
         echo -e "${GREEN}下载 cloudflared...${PLAIN}"
-
-        case $(uname -m) in
-            x86_64)  CF_ARCH="amd64" ;;
-            aarch64) CF_ARCH="arm64" ;;
-            *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
-        esac
-
-        url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}"
-        wget -O "$XSB_DIR/bin/cloudflared" "$url" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
+        case $(uname -m) in x86_64) CF_ARCH="amd64" ;; aarch64) CF_ARCH="arm64" ;; *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;; esac
+        wget -O "$XSB_DIR/bin/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
         chmod +x "$XSB_DIR/bin/cloudflared"
     fi
-
-    local cred_file="$XSB_DIR/conf/cf_creds"
-    local DOMAIN=""
-    if [[ -f "$cred_file" ]]; then
-        set -a
-        source "$cred_file"
-        set +a
-    fi
-
-    if [[ -z "$DOMAIN" ]]; then
-        echo -e "${RED}请在 $cred_file 中设置 DOMAIN${PLAIN}"
-        return 1
-    fi
-
-    local vmess_info
-    vmess_info=$(select_vmess_inbound "$DOMAIN") || return 1
-    IFS='|' read -r vmess_tag PORT WS_PATH <<< "$vmess_info"
-
-    echo -e "${GREEN}在 Cloudflare 中创建一条隧道，并添加路由 $DOMAIN$WS_PATH 指向 https://localhost:$PORT${PLAIN}"
-
-    read -p "请输入隧道 Token：" token_input
-    if [[ -z "$token_input" ]]; then
-        echo -e "${RED}Token 不能为空${PLAIN}"
-        return 1
-    fi
-
-    local token_file="$XSB_DIR/conf/argo_token"
-    echo "$token_input" > "$token_file"
-    chmod 600 "$token_file"
-    echo -e "${GREEN}Token 已保存至 $token_file${PLAIN}"
-
+    DOMAIN=$(get_or_ask "DOMAIN" "主域名" "")
+    [[ -z "$DOMAIN" ]] && { echo -e "${RED}需要 DOMAIN${PLAIN}"; return 1; }
+    ARGO_TOKEN=$(get_or_ask "ARGO_TOKEN" "请输入 Argo Tunnel Token" "")
+    [[ -z "$ARGO_TOKEN" ]] && { echo -e "${RED}Token 不能为空${PLAIN}"; return 1; }
+    echo "$ARGO_TOKEN" > "$XSB_DIR/conf/argo_token" && chmod 600 "$XSB_DIR/conf/argo_token"
     if [[ "$OS" == "alpine" ]]; then
         cat > /etc/init.d/argo-tunnel <<EOF
 #!/sbin/openrc-run
 command="$XSB_DIR/bin/cloudflared"
-command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $token_file"
+command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $XSB_DIR/conf/argo_token"
 command_user="root"
 pidfile="/run/argo-tunnel.pid"
 name="Cloudflare Argo Tunnel"
 description="Cloudflare Argo Tunnel ($DOMAIN)"
-
-depend() {
-    need net
-}
+depend() { need net; }
 EOF
         chmod +x /etc/init.d/argo-tunnel
         rc-update add argo-tunnel default 2>/dev/null
         rc-service argo-tunnel restart
     else
-        SERVICE_FILE="/etc/systemd/system/argo-tunnel.service"
-        cat > "$SERVICE_FILE" <<EOF
+        cat > /etc/systemd/system/argo-tunnel.service <<EOF
 [Unit]
 Description=Cloudflare Argo Tunnel ($DOMAIN)
 After=network.target
-
 [Service]
 Type=simple
-ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $token_file
+ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $XSB_DIR/conf/argo_token
 Restart=on-failure
 RestartSec=10s
 User=root
-
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -1050,97 +607,48 @@ EOF
         systemctl enable argo-tunnel 2>/dev/null
         systemctl restart argo-tunnel
     fi
-
-    echo -e "${GREEN}Argo 隧道服务已启动，域名: $DOMAIN${PLAIN}"
+    echo -e "${GREEN}已创建 Argo 隧道服务${PLAIN}"
     echo -e "查看状态: $([[ "$OS" == "alpine" ]] && echo "rc-service argo-tunnel status" || echo "systemctl status argo-tunnel")"
 }
 
-manage_cf() {
-    echo -e "\n${YELLOW}--- Cloudflare 配置 ---${PLAIN}"
-    echo "1) 配置 Origin Rule"
-    echo "2) 配置 Argo 隧道"
-    echo "3) 配置 DNS 记录"
-    read -p "选择 [1-3]: " choice
-    case $choice in
-        1) cf_origin_rule ;;
-        2) cf_argo ;;
-        3) cf_dns ;;
-        *) echo -e "${RED}无效${PLAIN}" ;;
-    esac
-}
-
-# -------------------- TCP 智能调优 --------------------
+# ---------- TCP 调优 ----------
 tcp_tune() {
-    echo -e "${YELLOW}开始 TCP 智能调优${PLAIN}"
+    echo -e "${YELLOW}TCP 智能调优${PLAIN}"
     if [[ ! -f "$XSB_DIR/bin/speedtest" ]]; then
         echo -e "${GREEN}安装 Speedtest...${PLAIN}"
-
-        case $(uname -m) in
-            x86_64)  ST_ARCH="x86_64" ;;
-            aarch64) ST_ARCH="aarch64" ;;
-            *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
-        esac
-
-        FILE_NAME=$(curl -s --max-time 5 "https://www.speedtest.net/apps/cli" | \
-                    grep -o "ookla-speedtest-[0-9.]\+-linux-${ST_ARCH}\.tgz" | \
-                    head -1)
-
-        if [[ -z "$FILE_NAME" ]]; then
-            echo -e "${RED}❌ 未找到 ${ST_ARCH} 对应的安装包${PLAIN}"
-            return 1
-        fi
-
-        wget -O /tmp/speedtest.tgz "https://install.speedtest.net/app/cli/${FILE_NAME}" || {
-            echo -e "${RED}❌ 下载失败${PLAIN}"
-            return 1
-        }
-
-        tar -xzf /tmp/speedtest.tgz -C /tmp
-        mv /tmp/speedtest "$XSB_DIR/bin/"
-        chmod +x "$XSB_DIR/bin/speedtest"
+        case $(uname -m) in x86_64) ST_ARCH="x86_64" ;; aarch64) ST_ARCH="aarch64" ;; *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;; esac
+        FILE_NAME=$(curl -s --max-time 5 "https://www.speedtest.net/apps/cli" | grep -o "ookla-speedtest-[0-9.]\+-linux-${ST_ARCH}\.tgz" | head -1)
+        [[ -z "$FILE_NAME" ]] && { echo -e "${RED}未找到安装包${PLAIN}"; return 1; }
+        wget -O /tmp/speedtest.tgz "https://install.speedtest.net/app/cli/${FILE_NAME}" || return 1
+        tar -xzf /tmp/speedtest.tgz -C /tmp && mv /tmp/speedtest "$XSB_DIR/bin/" && chmod +x "$XSB_DIR/bin/speedtest"
         rm -f /tmp/speedtest.tgz
-
-        echo -e "${GREEN}✅ Speedtest 安装完成${PLAIN}"
     fi
-
-    read -p "服务器 ID（默认 1536 香港）: " SERVER_ID
-    SERVER_ID=${SERVER_ID:-1536}
+    SERVER_ID=$(get_or_ask "TUNE_SERVER_ID" "测速服务器 ID (默认 1536)" "1536")
     echo -e "${GREEN}测速中...${PLAIN}"
     LANG=C speedtest_output=$("$XSB_DIR/bin/speedtest" --accept-license --accept-gdpr --server-id="$SERVER_ID" 2>&1)
-    echo -e "${GREEN}本次测速结果：${PLAIN}"
     echo "$speedtest_output"
     UPLOAD=$(echo "$speedtest_output" | awk -F': ' '/Upload:/ {print $2}' | awk '{print $1}')
-    if [[ -z "$UPLOAD" ]]; then
-        read -p "请手动输入带宽 (Mbit/s): " UPLOAD
-        [ -z "$UPLOAD" ] && UPLOAD=100
-    fi
-    UPLOAD_INT=$(echo "$UPLOAD" | awk '{printf("%.0f", $1)}')
-    BUFFER_MB=$(( (UPLOAD_INT / 8 + 3) / 4 * 4 ))
+    [[ -z "$UPLOAD" ]] && UPLOAD=$(get_or_ask "TUNE_BANDWIDTH" "手动输入带宽 (Mbit/s)" "100")
+    BUFFER_MB=$(( ($(echo "$UPLOAD" | awk '{printf("%.0f", $1)}') / 8 + 3) / 4 * 4 ))
     BUFFER_BYTES=$((BUFFER_MB * 1024 * 1024))
-    mkdir -p /etc/sysctl.d
     cat > /etc/sysctl.d/99-tcp.conf <<EOF
-# xsb 调优
 kernel.panic = 10
 vm.swappiness = 10
 vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 vm.min_free_kbytes = 65536
-
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 net.core.netdev_max_backlog = 25000
-
 net.core.rmem_default = 4194304
 net.core.wmem_default = 4194304
 net.core.rmem_max = ${BUFFER_BYTES}
 net.core.wmem_max = ${BUFFER_BYTES}
 net.ipv4.tcp_rmem = 4096 4194304 ${BUFFER_BYTES}
 net.ipv4.tcp_wmem = 4096 4194304 ${BUFFER_BYTES}
-
 net.ipv4.tcp_keepalive_time = 300
 net.ipv4.tcp_keepalive_intvl = 15
 net.ipv4.tcp_keepalive_probes = 3
-
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_fin_timeout = 10
@@ -1149,13 +657,11 @@ net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_window_scaling = 1
 net.ipv4.tcp_no_metrics_save = 1
 net.ipv4.tcp_notsent_lowat = 16384
-
 net.core.somaxconn = 16384
 net.ipv4.tcp_max_syn_backlog = 16384
 net.ipv4.tcp_synack_retries = 2
 net.ipv4.tcp_syn_retries = 2
 net.ipv4.tcp_syncookies = 1
-
 net.ipv4.tcp_sack = 1
 net.ipv4.tcp_dsack = 1
 net.ipv4.tcp_timestamps = 1
@@ -1168,93 +674,45 @@ EOF
     echo -e "${GREEN}TCP 调优完成 (缓冲区 ${BUFFER_MB}MB)${PLAIN}"
 }
 
-# -------------------- 构建配置并启动服务 --------------------
+# ---------- 构建配置并启动 ----------
 build_and_start() {
     echo -e "${GREEN}构建完整配置...${PLAIN}"
-
     inbounds_files=("$XSB_DIR"/inbounds/inbound_*.json)
-    if [[ ${#inbounds_files[@]} -eq 0 || ! -f "${inbounds_files[0]}" ]]; then
-        inbounds_json="[]"
-    else
-        inbounds_json=$(jq -s '.' "${inbounds_files[@]}" 2>/dev/null)
-        if [[ -z "$inbounds_json" ]]; then
-            echo -e "${RED}入站 JSON 合并失败${PLAIN}"
-            return 1
-        fi
+    inbounds_json='[]'
+    if [[ ${#inbounds_files[@]} -gt 0 && -f "${inbounds_files[0]}" ]]; then
+        inbounds_json=$(jq -s '.' "${inbounds_files[@]}" 2>/dev/null) || { echo -e "${RED}入站 JSON 合并失败${PLAIN}"; return 1; }
     fi
-
     outbounds_files=("$XSB_DIR"/outbounds/outbound_*.json)
-    if [[ ${#outbounds_files[@]} -eq 0 || ! -f "${outbounds_files[0]}" ]]; then
-        outbounds_json='[]'
-    else
-        outbounds_json=$(jq -s '.' "${outbounds_files[@]}" 2>/dev/null)
-        if [[ -z "$outbounds_json" ]]; then
-            echo -e "${RED}出站 JSON 合并失败${PLAIN}"
-            return 1
-        fi
+    outbounds_json='[]'
+    if [[ ${#outbounds_files[@]} -gt 0 && -f "${outbounds_files[0]}" ]]; then
+        outbounds_json=$(jq -s '.' "${outbounds_files[@]}" 2>/dev/null) || { echo -e "${RED}出站 JSON 合并失败${PLAIN}"; return 1; }
     fi
-
     endpoints_files=("$XSB_DIR"/outbounds/endpoint_*.json)
-    if [[ ${#endpoints_files[@]} -eq 0 || ! -f "${endpoints_files[0]}" ]]; then
-        endpoints_json='[]'
-    else
-        endpoints_json=$(jq -s '.' "${endpoints_files[@]}" 2>/dev/null)
-        if [[ -z "$endpoints_json" ]]; then
-            echo -e "${RED}端点 JSON 合并失败${PLAIN}"
-            return 1
-        fi
+    endpoints_json='[]'
+    if [[ ${#endpoints_files[@]} -gt 0 && -f "${endpoints_files[0]}" ]]; then
+        endpoints_json=$(jq -s '.' "${endpoints_files[@]}" 2>/dev/null) || { echo -e "${RED}端点 JSON 合并失败${PLAIN}"; return 1; }
     fi
-
     routes_files=("$XSB_DIR"/conf/routes/route_*.json)
     rules_json='[]'
     if [[ ${#routes_files[@]} -gt 0 && -f "${routes_files[0]}" ]]; then
-        rules_json=$(jq -s '.' "${routes_files[@]}" 2>/dev/null)
-        if [[ -z "$rules_json" ]]; then
-            echo -e "${RED}路由规则 JSON 合并失败${PLAIN}"
-            return 1
-        fi
+        rules_json=$(jq -s '.' "${routes_files[@]}" 2>/dev/null) || { echo -e "${RED}路由规则合并失败${PLAIN}"; return 1; }
     fi
-
-    # 预设规则（sniff, resolve）
-    preset_rules='[
-        { "action": "sniff" },
-        { "action": "resolve", "strategy": "prefer_ipv4" }
-    ]'
-    # 合并路由规则
+    preset_rules='[ { "action": "sniff" }, { "action": "resolve", "strategy": "prefer_ipv4" } ]'
     all_rules=$(jq -n --argjson preset "$preset_rules" --argjson user "$rules_json" '$preset + $user')
-
-    # 合并出站规则
     if [[ "$outbounds_json" == "[]" ]]; then
         outbounds_json='[ { "type": "direct", "tag": "direct" } ]'
     else
         outbounds_json=$(jq -n --argjson out "$outbounds_json" '$out + [ { "type": "direct", "tag": "direct" } ]')
     fi
-
-    # 生成最终配置
-    jq -n \
-        --argjson inbounds "$inbounds_json" \
-        --argjson outbounds "$outbounds_json" \
-        --argjson endpoints "$endpoints_json" \
-        --argjson rules "$all_rules" \
-        '{
-            log: { level: "info" },
-            inbounds: $inbounds,
-            outbounds: $outbounds,
-            endpoints: $endpoints,
-            route: {
-                rules: $rules,
-                final: "direct"
-            }
-        }' > "$XSB_DIR/conf/config.json"
-
+    jq -n --argjson inbounds "$inbounds_json" --argjson outbounds "$outbounds_json" --argjson endpoints "$endpoints_json" --argjson rules "$all_rules" \
+        '{ log: { level: "info" }, inbounds: $inbounds, outbounds: $outbounds, endpoints: $endpoints, route: { rules: $rules, final: "direct" } }' \
+        > "$XSB_DIR/conf/config.json"
     echo -e "${GREEN}配置文件生成: $XSB_DIR/conf/config.json${PLAIN}"
-
     if ! "$XSB_DIR/bin/sing-box" check -c "$XSB_DIR/conf/config.json" >/dev/null 2>&1; then
-        echo -e "${RED}配置文件存在问题。${PLAIN}"
-        "$XSB_DIR/bin/sing-box" check -c "$XSB_DIR/conf/config.json"  # 显示详细错误
+        echo -e "${RED}配置文件检查失败:${PLAIN}"
+        "$XSB_DIR/bin/sing-box" check -c "$XSB_DIR/conf/config.json"
         return 1
     fi
-
     if [[ "$OS" == "alpine" ]]; then
         cat > /etc/init.d/sing-box <<EOF
 #!/sbin/openrc-run
@@ -1264,186 +722,181 @@ command_user="root"
 pidfile="/run/sing-box.pid"
 name="Sing-box"
 description="Sing-box Service"
-
-depend() {
-    need net
-}
+depend() { need net; }
 EOF
         chmod +x /etc/init.d/sing-box
         rc-update add sing-box default 2>/dev/null
         rc-service sing-box restart
-        sleep 2
-        if rc-service sing-box status | grep -q "started"; then
-            echo -e "${GREEN}Sing-box 已成功启动${PLAIN}"
-        else
-            echo -e "${RED}Sing-box 启动失败，请检查日志${PLAIN}"
-            return 1
-        fi
     else
         cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
 Description=Sing-box Service
 After=network.target
-
 [Service]
 Type=simple
 ExecStart=$XSB_DIR/bin/sing-box run -c $XSB_DIR/conf/config.json
 Restart=on-failure
 RestartSec=5s
-
 [Install]
 WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
         systemctl enable sing-box 2>/dev/null
         systemctl restart sing-box
-        sleep 2
-        if systemctl is-active --quiet sing-box; then
-            echo -e "${GREEN}Sing-box 已成功启动${PLAIN}"
-        else
-            echo -e "${RED}Sing-box 启动失败，请检查日志${PLAIN}"
-            return 1
-        fi
     fi
-    echo -e "${GREEN}Sing-box 已启动${PLAIN}"
+    echo -e "${GREEN}已创建 sing-box 服务${PLAIN}"
+    echo -e "查看状态: $([[ "$OS" == "alpine" ]] && echo "rc-service sing-box status" || echo "systemctl status sing-box")"
 }
 
-# -------------------- 显示节点信息 --------------------
+# ---------- 显示节点信息 ----------
 show_info() {
-    local ipv4=$(cat "$XSB_DIR/conf/ipv4" 2>/dev/null)
-    local ipv6=$(cat "$XSB_DIR/conf/ipv6" 2>/dev/null)
+    ipv4=$(curl -s4 --max-time 3 ifconfig.me 2>/dev/null)
+    ipv6=$(curl -s6 --max-time 3 ifconfig.me 2>/dev/null)
     echo "=================================================="
     echo -e "${GREEN}节点 IP 信息:${PLAIN}"
     echo "  IPv4: ${ipv4:-无}"
     echo "  IPv6: ${ipv6:-无}"
     echo "--------------------------------------------------"
-    UUID=$(cat "$XSB_DIR/conf/uuid" 2>/dev/null || echo "未设置")
-    echo "UUID: $UUID"
+
     for f in "$XSB_DIR"/inbounds/inbound_*.json; do
         [[ ! -f "$f" ]] && continue
         tag=$(basename "$f" .json | sed 's/inbound_//')
         type=$(jq -r '.type' "$f")
         port=$(jq -r '.listen_port' "$f")
+
         case $type in
             vless)
+                uuid=$(jq -r '.users[0].uuid' "$f")
                 sni=$(jq -r '.tls.server_name' "$f")
                 sid=$(jq -r '.tls.reality.short_id[0]' "$f")
                 pub_key_file="$XSB_DIR/inbounds/inbound_${tag}_reality_public_key"
-                if [[ -f "$pub_key_file" ]]; then
-                    PUBLIC_KEY=$(cat "$pub_key_file")
-                else
-                    PUBLIC_KEY=""
-                fi
-                if [[ -n "$ipv4" ]]; then
-                    echo "vless://$UUID@$ipv4:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
-                fi
-                if [[ -n "$ipv6" ]]; then
-                    echo "vless://$UUID@[$ipv6]:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
-                fi
+                [[ -f "$pub_key_file" ]] && PUBLIC_KEY=$(cat "$pub_key_file") || PUBLIC_KEY=""
+                [[ -n "$ipv4" ]] && echo "vless://$uuid@$ipv4:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
+                [[ -n "$ipv6" ]] && echo "vless://$uuid@[$ipv6]:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                 ;;
             anytls)
+                password=$(jq -r '.users[0].password' "$f")
                 sni=$(jq -r '.tls.server_name' "$f")
                 if jq -e '.tls.reality' "$f" >/dev/null 2>&1; then
                     sid=$(jq -r '.tls.reality.short_id[0]' "$f")
                     pub_key_file="$XSB_DIR/inbounds/inbound_${tag}_reality_public_key"
-                    if [[ -f "$pub_key_file" ]]; then
-                        PUBLIC_KEY=$(cat "$pub_key_file")
-                    else
-                        PUBLIC_KEY=""
-                    fi
-                    if [[ -n "$ipv4" ]]; then
-                        echo "anytls://$UUID@$ipv4:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
-                    fi
-                    if [[ -n "$ipv6" ]]; then
-                        echo "anytls://$UUID@[$ipv6]:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
-                    fi
+                    [[ -f "$pub_key_file" ]] && PUBLIC_KEY=$(cat "$pub_key_file") || PUBLIC_KEY=""
+                    [[ -n "$ipv4" ]] && echo "anytls://$password@$ipv4:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
+                    [[ -n "$ipv6" ]] && echo "anytls://$password@[$ipv6]:$port?security=reality&sni=$sni&fp=chrome&pbk=$PUBLIC_KEY&sid=$sid&type=tcp#$tag"
                 else
-                    if [[ -n "$ipv4" ]]; then
-                        echo "anytls://$UUID@$ipv4:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
-                    fi
-                    if [[ -n "$ipv6" ]]; then
-                        echo "anytls://$UUID@[$ipv6]:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
-                    fi
+                    [[ -n "$ipv4" ]] && echo "anytls://$password@$ipv4:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
+                    [[ -n "$ipv6" ]] && echo "anytls://$password@[$ipv6]:$port?security=tls&sni=$sni&insecure=0&type=tcp#$tag"
                 fi
                 ;;
             hysteria2)
+                password=$(jq -r '.users[0].password' "$f")
                 sni=$(jq -r '.tls.server_name' "$f")
                 hop_file="$XSB_DIR/inbounds/inbound_${tag}.hop"
-                if [[ -f "$hop_file" ]]; then
-                    hop_range=$(cat "$hop_file")
-                fi
-                if [[ -n "$ipv4" ]]; then
-                    echo "hysteria2://$UUID@$ipv4:$port?sni=$sni&insecure=0&mport=$hop_range#$tag"
-                fi
-                if [[ -n "$ipv6" ]]; then
-                    echo "hysteria2://$UUID@[$ipv6]:$port?sni=$sni&insecure=0&mport=$hop_range#$tag"
-                fi
+                hop_range=""
+                [[ -f "$hop_file" ]] && hop_range=$(cat "$hop_file")
+                [[ -n "$ipv4" ]] && echo "hysteria2://$password@$ipv4:$port?sni=$sni&insecure=0${hop_range:+&mport=$hop_range}#$tag"
+                [[ -n "$ipv6" ]] && echo "hysteria2://$password@[$ipv6]:$port?sni=$sni&insecure=0${hop_range:+&mport=$hop_range}#$tag"
                 ;;
             vmess)
+                uuid=$(jq -r '.users[0].uuid' "$f")
                 host=$(jq -r '.transport.headers.Host' "$f")
                 path=$(jq -r '.transport.path' "$f")
-                if [[ -n "$ipv4" ]]; then
-                    vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv4\",\"port\":\"$port\",\"id\":\"$UUID\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
-                    echo "vmess://$(echo -n "$vmess_json" | openssl base64 -A 2>/dev/null)"
-                fi
-                if [[ -n "$ipv6" ]]; then
-                    vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"[$ipv6]\",\"port\":\"$port\",\"id\":\"$UUID\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
-                    echo "vmess://$(echo -n "$vmess_json" | openssl base64 -A 2>/dev/null)"
-                fi
+                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv4\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
+                [[ -n "$ipv4" ]] && echo "vmess://$(echo -n "$vmess_json" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)"
+                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv6\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
+                [[ -n "$ipv6" ]] && echo "vmess://$(echo -n "$vmess_json" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)"
                 ;;
             shadowsocks)
                 method=$(jq -r '.method' "$f")
                 password=$(jq -r '.password' "$f")
-                ss_userinfo=$(echo -n "$method:$password" | openssl base64 -A 2>/dev/null)
-                tag_b64=$(echo -n "$tag" | openssl base64 -A 2>/dev/null)
-                if [[ -n "$ipv4" ]]; then
-                    echo "ss://$ss_userinfo@$ipv4:$port#$tag_b64"
-                fi
-                if [[ -n "$ipv6" ]]; then
-                    echo "ss://$ss_userinfo@[$ipv6]:$port#$tag_b64"
-                fi
+                ss_userinfo=$(echo -n "$method:$password" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)
+                tag_b64=$(echo -n "$tag" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)
+                [[ -n "$ipv4" ]] && echo "ss://$ss_userinfo@$ipv4:$port#$tag_b64"
+                [[ -n "$ipv6" ]] && echo "ss://$ss_userinfo@[$ipv6]:$port#$tag_b64"
                 ;;
         esac
     done
     echo "=================================================="
 }
 
-# -------------------- 主菜单 --------------------
-main() {
-    install_deps
-    init_cf_creds
-    save_ip
+# ---------- 交互菜单 ----------
+interactive_menu() {
     while true; do
         echo -e "\n${YELLOW}========== 主菜单 ==========${PLAIN}"
         echo "1) 安装/更新/卸载 Sing-box"
         echo "2) 管理证书"
         echo "3) 管理入站"
         echo "4) 管理出站"
-        echo "5) Cloudflare 配置 (Origin Rule / Argo / DNS)"
+        echo "5) Cloudflare 配置 (DNS / Origin Rule / Argo)"
         echo "6) TCP 智能调优"
         echo "7) 构建配置并启动服务"
         echo "8) 显示节点信息"
         echo "0) 退出"
         read -p "请选择 [0-8]: " main_choice
         case $main_choice in
-            1) manage_singbox ;;
-            2) manage_certs ;;
-            3) manage_inbounds ;;
-            4) manage_outbounds ;;
-            5) manage_cf ;;
+            1)
+                echo "1) 安装  2) 更新  3) 卸载"
+                read -p "选择 [1-3]: " sub
+                case $sub in 1) install_singbox ;; 2) update_singbox ;; 3) uninstall_singbox ;; *) echo -e "${RED}无效${PLAIN}" ;; esac
+                ;;
+            2)
+                echo "1) 列出证书  2) 添加证书  3) 删除证书"
+                read -p "选择 [1-3]: " sub
+                case $sub in 1) list_certs ;; 2) add_cert ;; 3) delete_cert ;; *) echo -e "${RED}无效${PLAIN}" ;; esac
+                ;;
+            3)
+                echo "1) 列出入站  2) 添加入站  3) 删除入站"
+                read -p "选择 [1-3]: " sub
+                case $sub in 1) list_inbounds ;; 2) add_inbound ;; 3) delete_inbound ;; *) echo -e "${RED}无效${PLAIN}" ;; esac
+                ;;
+            4)
+                echo "1) 列出出站  2) 添加出站  3) 删除出站"
+                read -p "选择 [1-3]: " sub
+                case $sub in 1) list_outbounds ;; 2) add_outbound ;; 3) delete_outbound ;; *) echo -e "${RED}无效${PLAIN}" ;; esac
+                ;;
+            5)
+                echo "1) DNS 记录  2) Origin Rule  3) Argo 隧道"
+                read -p "选择 [1-3]: " sub
+                case $sub in 1) cf_dns ;; 2) cf_origin_rule ;; 3) cf_argo ;; *) echo -e "${RED}无效${PLAIN}" ;; esac
+                ;;
             6) tcp_tune ;;
             7) build_and_start ;;
             8) show_info ;;
-            0)
-                read -p "是否清除 Cloudflare 凭证文件中的敏感信息？[y/N]: " clean
-                if [[ "$clean" =~ [Yy] ]]; then
-                    cleanup_creds
-                fi
-                exit 0
-                ;;
+            0) exit 0 ;;
             *) echo -e "${RED}无效选择${PLAIN}" ;;
         esac
     done
 }
 
-main "$@"
+XSB_TASKS="${XSB_TASKS:-}"
+if [[ -n "$XSB_TASKS" ]]; then
+    for task in $(echo "$XSB_TASKS" | tr ',' ' '); do
+        case "$task" in
+            install) 
+                install_deps
+                install_singbox
+                ;;
+            cert) add_cert ;;
+            inbound) add_inbound ;;
+            outbound) add_outbound ;;
+            cf_dns) cf_dns ;;
+            cf_origin_rule) cf_origin_rule ;;
+            cf_argo) cf_argo ;;
+            tune) tcp_tune ;;
+            build) 
+                build_and_start 
+                show_info
+                ;;
+            *) echo -e "${RED}未知任务: $task${PLAIN}" ;;
+        esac
+    done
+    if [[ "$XSB_TASKS" =~ (inbound|outbound) ]] && [[ ! "$XSB_TASKS" =~ build ]]; then
+        echo -e "${YELLOW}检测到配置变更，自动构建并启动...${PLAIN}"
+        build_and_start
+        show_info
+    fi
+    exit 0
+else
+    install_deps
+    interactive_menu
+fi
