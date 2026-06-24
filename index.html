@@ -6,257 +6,390 @@
 <title>Sing-box 部署命令生成器 (xsb)</title>
 <style>
 :root {
-    --bg: #0b1020;
-    --card: #121831;
-    --ink: #e9edf7;
-    --sub: #b7c1d9;
-    --line: #263255;
-    --acc: #4f7cff;
-    --ok: #22c55e;
+    --bg: #090d1a;
+    --card: #121829;
+    --ink: #f1f5f9;
+    --sub: #94a3b8;
+    --line: #1e293b;
+    --acc: #4f46e5;
+    --acc-hover: #6366f1;
+    --ok: #10b981;
     --warn: #f59e0b;
     --err: #ef4444;
-    --input-bg: #0d1430;
-    --button-bg-dark: #1a2346;
-    --button-bg-light: #121a39;
-    --body-bg: linear-gradient(180deg, var(--bg) 0%, #0e1530 100%);
-    --radius: 10px;
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --input-bg: #0b0f19;
+    --button-bg-dark: #1e293b;
+    --button-bg-light: #334155;
+    --body-bg: radial-gradient(circle at top, #1e1b4b 0%, var(--bg) 50%);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .light-mode {
-    --bg: #ffffff;
+    --bg: #f8fafc;
     --card: #ffffff;
-    --ink: #1a202c;
-    --sub: #4a5568;
+    --ink: #0f172a;
+    --sub: #64748b;
     --line: #e2e8f0;
-    --acc: #4f7cff;
-    --ok: #22c55e;
+    --acc: #4f46e5;
+    --acc-hover: #4338ca;
+    --ok: #10b981;
     --warn: #f59e0b;
     --err: #ef4444;
-    --input-bg: #ffffff;
+    --input-bg: #f1f5f9;
     --button-bg-dark: #e2e8f0;
-    --button-bg-light: #f0f4f9;
+    --button-bg-light: #cbd5e1;
     --body-bg: var(--bg);
+    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
     margin: 0;
     background: var(--body-bg);
     color: var(--ink);
-    font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     min-height: 100vh;
-    padding: 20px;
+    padding: 40px 20px;
+    transition: background 0.3s;
 }
-a { color: var(--acc); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.wrap { max-width: 1400px; margin: 0 auto; }
+a { color: var(--acc); text-decoration: none; transition: var(--transition); }
+a:hover { color: var(--acc-hover); text-decoration: underline; }
+.wrap { max-width: 1300px; margin: 0 auto; }
 
 header {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
     position: relative;
+    padding-bottom: 10px;
 }
 header h1 {
-    font-size: 28px;
-    letter-spacing: 1px;
-    background: linear-gradient(135deg, var(--acc), #a78bfa);
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #818cf8, #c084fc);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin: 0;
 }
+.light-mode header h1 {
+    background: linear-gradient(135deg, #4f46e5, #9333ea);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
 header .repo-link {
     font-size: 14px;
     color: var(--sub);
-    margin-top: 2px;
+    margin-top: 6px;
+    font-weight: 500;
 }
-header .repo-link a { color: var(--acc); }
 header .sub-desc {
-    margin-top: 8px;
-    font-size: 14px;
+    margin-top: 10px;
+    font-size: 15px;
     color: var(--sub);
 }
 #themeToggle {
     position: absolute;
     right: 0;
-    top: 0;
-    background: var(--button-bg-dark);
+    top: 6px;
+    background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
     color: var(--ink);
     cursor: pointer;
     font-size: 14px;
-    transition: 0.2s;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
-#themeToggle:hover { background: var(--button-bg-light); }
+#themeToggle:hover { background: var(--button-bg-dark); border-color: var(--sub); }
+
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+@media (min-width: 1024px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 1fr 500px;
+        gap: 24px;
+        align-items: start;
+    }
+    .output-side {
+        position: sticky;
+        top: 24px;
+    }
+}
 
 .card {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 20px 24px;
-    margin-bottom: 20px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
     box-shadow: var(--shadow);
+    transition: border-color 0.3s;
 }
 .card h2 {
-    font-size: 18px;
-    margin-bottom: 14px;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 18px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     color: var(--ink);
 }
-.card .hint {
-    font-size: 13px;
-    color: var(--sub);
-    margin: -6px 0 12px 0;
-}
 
-.entry-list { margin-top: 12px; }
+.entry-list { margin-top: 14px; }
 .entry-item {
     background: var(--input-bg);
     border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    margin-bottom: 14px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px 16px;
+    gap: 14px 20px;
+    animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 .entry-item .row {
-    flex: 1 1 180px;
+    flex: 1 1 200px;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
 }
 .entry-item .row label {
     font-size: 13px;
+    font-weight: 600;
     color: var(--sub);
-    min-width: 60px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 .entry-item .row input,
 .entry-item .row select {
-    flex: 1;
-    min-width: 80px;
-    padding: 4px 8px;
+    width: 100%;
+    padding: 8px 12px;
     border: 1px solid var(--line);
-    border-radius: 4px;
-    background: var(--bg);
+    border-radius: 6px;
+    background: var(--card);
     color: var(--ink);
-    font-size: 13px;
+    font-size: 14px;
+    transition: var(--transition);
 }
 .entry-item .row input:focus,
 .entry-item .row select:focus {
     border-color: var(--acc);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
     outline: none;
 }
 .entry-item .del-btn {
-    background: transparent;
+    background: rgba(239, 68, 68, 0.1);
     border: none;
     color: var(--err);
-    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
     cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
-    opacity: 0.7;
-    transition: opacity 0.2s;
+    transition: var(--transition);
+    align-self: flex-end;
+    margin-bottom: 4px;
 }
-.entry-item .del-btn:hover { opacity: 1; }
+.entry-item .del-btn:hover { background: var(--err); color: #fff; transform: scale(1.05); }
+
 .add-btn {
-    background: var(--button-bg-dark);
-    border: 1px dashed var(--line);
+    background: transparent;
+    border: 2px dashed var(--line);
     color: var(--sub);
-    padding: 6px 16px;
-    border-radius: 20px;
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 13px;
-    transition: background 0.2s, border 0.2s;
-    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: var(--transition);
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 .add-btn:hover {
-    background: var(--button-bg-light);
+    background: rgba(79, 70, 229, 0.05);
     border-color: var(--acc);
-    color: var(--ink);
+    color: var(--acc);
 }
 
 .global-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px 30px;
+    gap: 20px 32px;
     align-items: center;
 }
 .global-row .field {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 200px;
 }
 .global-row .field label {
     color: var(--sub);
-    font-size: 14px;
-    min-width: 70px;
+    font-size: 13px;
+    font-weight: 600;
 }
 .global-row .field input {
-    padding: 6px 12px;
+    padding: 10px 14px;
     border: 1px solid var(--line);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: var(--input-bg);
     color: var(--ink);
     font-size: 14px;
-    width: 220px;
+    width: 100%;
+    transition: var(--transition);
 }
 .global-row .field input:focus {
     border-color: var(--acc);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
     outline: none;
 }
 
 .output-area textarea {
     width: 100%;
-    min-height: 200px;
-    padding: 12px 16px;
+    min-height: 180px;
+    padding: 14px;
     border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--input-bg);
-    color: var(--ink);
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    border-radius: var(--radius-sm);
+    background: #05070f;
+    color: #38bdf8;
+    font-family: 'Fira Code', 'SF Mono', Consolas, Monaco, monospace;
     font-size: 13px;
+    line-height: 1.6;
     resize: vertical;
     tab-size: 2;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+}
+.light-mode .output-area textarea {
+    background: #f8fafc;
+    color: #0f172a;
+    border-color: var(--line);
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.05);
 }
 .output-area textarea:focus {
     outline: none;
     border-color: var(--acc);
 }
+
+.single-cmd-list {
+    margin-top: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+.single-cmd-list::-webkit-scrollbar { width: 5px; height: 5px; }
+.single-cmd-list::-webkit-scrollbar-track { background: transparent; }
+.single-cmd-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+.single-cmd-list::-webkit-scrollbar-thumb:hover { background: var(--sub); }
+
+.single-cmd-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: var(--transition);
+}
+.light-mode .single-cmd-item { background: rgba(0, 0, 0, 0.01); }
+.single-cmd-item:hover { border-color: var(--sub); background: rgba(255, 255, 255, 0.04); }
+.light-mode .single-cmd-item:hover { background: rgba(0, 0, 0, 0.03); }
+
+.single-cmd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.single-cmd-title {
+    font-size: 12.5px;
+    color: var(--sub);
+    font-family: 'Fira Code', monospace;
+    font-weight: 600;
+}
+.single-cmd-actions .single-copy-btn {
+    background: transparent;
+    border: none;
+    color: var(--acc);
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: var(--transition);
+}
+.single-cmd-actions .single-copy-btn:hover { background: rgba(79, 70, 229, 0.1); color: var(--acc-hover); }
+
+.single-cmd-body {
+    font-family: 'Fira Code', 'SF Mono', monospace;
+    font-size: 12.5px;
+    color: #0ea5e9;
+    white-space: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+.light-mode .single-cmd-body { color: #1e293b; }
+.single-cmd-body::-webkit-scrollbar { height: 4px; }
+.single-cmd-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
 .output-area .actions {
     display: flex;
-    gap: 12px;
-    margin-top: 12px;
+    align-items: center;
+    gap: 14px;
+    margin-top: 16px;
     flex-wrap: wrap;
 }
 .output-area .actions button {
-    padding: 8px 24px;
-    border: none;
-    border-radius: 6px;
+    padding: 10px 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     background: var(--button-bg-dark);
     color: var(--ink);
+    transition: var(--transition);
 }
-.output-area .actions button:hover { background: var(--button-bg-light); }
+.output-area .actions button:hover { background: var(--button-bg-light); border-color: var(--sub); }
 .output-area .actions button.primary {
     background: var(--acc);
     color: #fff;
+    border: none;
 }
-.output-area .actions button.primary:hover { opacity: 0.85; }
-.output-area .actions button:active { transform: scale(0.97); }
+.output-area .actions button.primary:hover { background: var(--acc-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+.output-area .actions button:active { transform: scale(0.98); }
 .output-area .copy-feedback {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--ok);
-    margin-left: 8px;
+    margin-left: 4px;
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.3s ease;
 }
 .output-area .copy-feedback.show { opacity: 1; }
 
@@ -264,16 +397,17 @@ footer {
     text-align: center;
     color: var(--sub);
     font-size: 14px;
-    padding: 20px 0 10px;
+    padding: 30px 0 10px;
     border-top: 1px solid var(--line);
-    margin-top: 20px;
+    margin-top: 40px;
 }
-footer a { color: var(--acc); }
+footer a { color: var(--sub); font-weight: 500; }
+footer a:hover { color: var(--acc); }
 
 .socks-row-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px 16px;
+    gap: 14px 20px;
     flex: 1 1 100%;
 }
 .socks-row-group .row {
@@ -283,16 +417,42 @@ footer a { color: var(--acc); }
 .extra-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px 24px;
-    margin: 8px 0 4px 0;
+    gap: 16px 20px;
+    margin: 14px 0 14px 0;
+    padding: 12px 14px;
+    background: rgba(79, 70, 229, 0.03);
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--line);
 }
 .extra-options label {
     display: flex;
     align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: var(--ink);
+    font-weight: 500;
+    cursor: pointer;
+}
+.extra-options input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--acc);
+    cursor: pointer;
+}
+.output-type-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.output-type-group label {
+    display: flex;
+    align-items: center;
     gap: 6px;
     font-size: 14px;
-    color: var(--sub);
     cursor: pointer;
+}
+.output-type-group input[type="radio"] {
+    accent-color: var(--acc);
 }
 </style>
 </head>
@@ -308,88 +468,90 @@ footer a { color: var(--acc); }
     <button id="themeToggle">🌙 暗色</button>
 </header>
 
-<!-- 全局 Cloudflare 凭证 -->
-<div class="card">
-    <h2>🔑 全局 Cloudflare 凭证</h2>
-    <div class="global-row">
-        <div class="field">
-            <label>CF_Key</label>
-            <input id="globalCfKey" type="text" placeholder="Cloudflare API Key" />
+<div class="main-content">
+    <div class="config-side">
+        <div class="card">
+            <h2>🔑 全局 Cloudflare 凭证</h2>
+            <div class="global-row">
+                <div class="field">
+                    <label>CF_Key</label>
+                    <input id="globalCfKey" type="text" placeholder="Cloudflare API Key" />
+                </div>
+                <div class="field">
+                    <label>CF_Email</label>
+                    <input id="globalCfEmail" type="text" placeholder="Cloudflare Email" />
+                </div>
+            </div>
+            <div style="font-size:13px;color:var(--sub);margin-top:10px;">用于 DNS‑01 证书验证、DNS 记录、Origin Rule 和 Argo 隧道。</div>
         </div>
-        <div class="field">
-            <label>CF_Email</label>
-            <input id="globalCfEmail" type="text" placeholder="Cloudflare Email" />
+
+        <div class="card" id="certModule">
+            <h2>🔐 证书</h2>
+            <div id="certList" class="entry-list"></div>
+            <button class="add-btn" data-type="cert">➕ 添加证书</button>
+        </div>
+
+        <div class="card" id="inboundModule">
+            <h2>📥 入站</h2>
+            <div id="inboundList" class="entry-list"></div>
+            <button class="add-btn" data-type="inbound">➕ 添加入站</button>
+        </div>
+
+        <div class="card" id="outboundModule">
+            <h2>📤 出站</h2>
+            <div id="outboundList" class="entry-list"></div>
+            <button class="add-btn" data-type="outbound">➕ 添加出站</button>
+        </div>
+
+        <div class="card" id="cfDnsModule">
+            <h2>☁️ DNS 记录</h2>
+            <div id="cfDnsList" class="entry-list"></div>
+            <button class="add-btn" data-type="cf_dns">➕ 添加 DNS 记录</button>
+        </div>
+
+        <div class="card" id="cfOriginRuleModule">
+            <h2>☁️ Origin Rule</h2>
+            <div id="cfOriginRuleList" class="entry-list"></div>
+            <button class="add-btn" data-type="cf_origin_rule">➕ 添加 Origin Rule</button>
+        </div>
+
+        <div class="card" id="cfArgoModule">
+            <h2>☁️ Argo 隧道</h2>
+            <div id="cfArgoList" class="entry-list"></div>
+            <button class="add-btn" data-type="cf_argo">➕ 添加 Argo 隧道</button>
         </div>
     </div>
-    <div style="font-size:12px;color:var(--sub);margin-top:6px;">用于 DNS‑01 证书验证、DNS 记录、Origin Rule 和 Argo 隧道。</div>
-</div>
 
-<!-- 证书 -->
-<div class="card" id="certModule">
-    <h2>🔐 证书</h2>
-    <div id="certList" class="entry-list"></div>
-    <button class="add-btn" data-type="cert">➕ 添加证书</button>
-</div>
+    <div class="output-side">
+        <div class="card output-area" style="margin-bottom:0;">
+            <h2>📋 生成的命令列表</h2>
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px;">
+                <div class="output-type-group">
+                    <span style="color:var(--sub);font-size:14px;font-weight:600;">命令类型：</span>
+                    <label><input type="radio" name="cmdTypeOut" value="curl" checked /> curl</label>
+                    <label><input type="radio" name="cmdTypeOut" value="wget" /> wget</label>
+                </div>
+            </div>
+            <div class="extra-options">
+                <label><input type="checkbox" id="includeTune" /> 包含 TCP 调优 (tune)</label>
+                <label><input type="checkbox" id="includeInstall" checked /> 包含 install (首次部署必需)</label>
+            </div>
+            
+            <textarea id="outputCmd" spellcheck="false" readonly></textarea>
+            
+            <div id="singleCmdTitle" style="margin-top: 16px; font-size: 13.5px; font-weight: 600; color: var(--sub);">📌 单行独立复制：</div>
+            <div id="singleCmdList" class="single-cmd-list"></div>
 
-<!-- 入站 -->
-<div class="card" id="inboundModule">
-    <h2>📥 入站</h2>
-    <div id="inboundList" class="entry-list"></div>
-    <button class="add-btn" data-type="inbound">➕ 添加入站</button>
-</div>
-
-<!-- 出站 -->
-<div class="card" id="outboundModule">
-    <h2>📤 出站</h2>
-    <div id="outboundList" class="entry-list"></div>
-    <button class="add-btn" data-type="outbound">➕ 添加出站</button>
-</div>
-
-<!-- Cloudflare 拆分三个卡片 -->
-<!-- DNS 记录 -->
-<div class="card" id="cfDnsModule">
-    <h2>☁️ DNS 记录</h2>
-    <div id="cfDnsList" class="entry-list"></div>
-    <button class="add-btn" data-type="cf_dns">➕ 添加 DNS 记录</button>
-</div>
-
-<!-- Origin Rule -->
-<div class="card" id="cfOriginRuleModule">
-    <h2>☁️ Origin Rule</h2>
-    <div id="cfOriginRuleList" class="entry-list"></div>
-    <button class="add-btn" data-type="cf_origin_rule">➕ 添加 Origin Rule</button>
-</div>
-
-<!-- Argo -->
-<div class="card" id="cfArgoModule">
-    <h2>☁️ Argo 隧道</h2>
-    <div id="cfArgoList" class="entry-list"></div>
-    <button class="add-btn" data-type="cf_argo">➕ 添加 Argo 隧道</button>
-</div>
-
-<!-- 输出 -->
-<div class="card output-area">
-    <h2>📋 生成的命令列表</h2>
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
-        <span style="color:var(--sub);font-size:14px;">命令类型：</span>
-        <label><input type="radio" name="cmdTypeOut" value="curl" checked /> curl</label>
-        <label><input type="radio" name="cmdTypeOut" value="wget" /> wget</label>
-        <button id="btnGenerate" class="primary" style="margin-left:auto;padding:6px 20px;border:none;border-radius:6px;background:var(--acc);color:#fff;cursor:pointer;font-size:14px;">🔄 生成命令</button>
-    </div>
-    <div class="extra-options">
-        <label><input type="checkbox" id="includeTune" /> 包含 TCP 调优 (tune)</label>
-        <label><input type="checkbox" id="includeInstall" checked /> 自动包含 install (首次部署必需)</label>
-    </div>
-    <textarea id="outputCmd" spellcheck="false" readonly></textarea>
-    <div class="actions">
-        <button id="btnCopy">📋 复制全部</button>
-        <button id="btnReset">↺ 清空所有条目</button>
-        <span id="copyFeedback" class="copy-feedback">✅ 已复制</span>
-    </div>
-    <div style="font-size:12px;color:var(--sub);margin-top:8px;">
-        💡 每条命令对应一个配置条目，复制全部后在服务器（root）顺序执行。<br>
-        ⚠️ 首次部署必须包含 <strong>install</strong>（已自动添加），用于安装依赖和 Sing-box。<br>
-        📌 单独执行入站/出站配置后，会自动构建并重启服务。
+            <div class="actions">
+                <button id="btnCopy" class="primary">📋 复制全部命令</button>
+                <button id="btnReset">↺ 清空所有</button>
+                <span id="copyFeedback" class="copy-feedback">✅ 已复制到剪贴板</span>
+            </div>
+            <div style="font-size:13px;color:var(--sub);margin-top:14px;line-height:1.6;background:rgba(245,158,11,0.05);padding:12px 16px;border-left:4px solid var(--warn);border-radius:4px;">
+                💡 可单独调整入站和出站，会自动构建并重启服务。<br>
+                ⚠️ 首次部署必须包含 <strong>install</strong>。
+            </div>
+        </div>
     </div>
 </div>
 
@@ -418,7 +580,7 @@ footer a { color: var(--acc); }
     const globalCfKey = document.getElementById('globalCfKey');
     const globalCfEmail = document.getElementById('globalCfEmail');
     const outputCmd = document.getElementById('outputCmd');
-    const btnGenerate = document.getElementById('btnGenerate');
+    const singleCmdList = document.getElementById('singleCmdList');
     const btnCopy = document.getElementById('btnCopy');
     const btnReset = document.getElementById('btnReset');
     const copyFeedback = document.getElementById('copyFeedback');
@@ -426,6 +588,15 @@ footer a { color: var(--acc); }
     const cmdTypeRadios = document.querySelectorAll('input[name="cmdTypeOut"]');
     const includeTune = document.getElementById('includeTune');
     const includeInstall = document.getElementById('includeInstall');
+
+    const moduleMap = {
+        cert: { container: 'certList', fn: renderCertEntry },
+        inbound: { container: 'inboundList', fn: renderInboundEntry },
+        outbound: { container: 'outboundList', fn: renderOutboundEntry },
+        cf_dns: { container: 'cfDnsList', fn: renderCfDnsEntry },
+        cf_origin_rule: { container: 'cfOriginRuleList', fn: renderCfOriginRuleEntry },
+        cf_argo: { container: 'cfArgoList', fn: renderCfArgoEntry }
+    };
 
     function applyTheme(isLight) {
         document.body.classList.toggle('light-mode', isLight);
@@ -449,12 +620,16 @@ footer a { color: var(--acc); }
     }
 
     function renderAll() {
-        renderList('cert', 'certList', renderCertEntry);
-        renderList('inbound', 'inboundList', renderInboundEntry);
-        renderList('outbound', 'outboundList', renderOutboundEntry);
-        renderList('cf_dns', 'cfDnsList', renderCfDnsEntry);
-        renderList('cf_origin_rule', 'cfOriginRuleList', renderCfOriginRuleEntry);
-        renderList('cf_argo', 'cfArgoList', renderCfArgoEntry);
+        Object.keys(moduleMap).forEach(type => {
+            renderModuleList(type);
+        });
+    }
+
+    function renderModuleList(type) {
+        const map = moduleMap[type];
+        if (map) {
+            renderList(type, map.container, map.fn);
+        }
         bindDynamicSelects();
     }
 
@@ -523,7 +698,7 @@ footer a { color: var(--acc); }
                             <option value="y" ${item.enable_hop == 'y' ? 'selected' : ''}>是</option>
                         </select>
                     </div>
-                    ${showHop ? `<div class="row" style="flex:1 1 100%;"><label>跳跃范围</label><input type="text" value="${escHtml(item.hop_start || '60000')}" placeholder="起始" data-field="hop_start" style="flex:1;min-width:60px;" /> — <input type="text" value="${escHtml(item.hop_end || '65000')}" placeholder="结束" data-field="hop_end" style="flex:1;min-width:60px;" /></div>` : ''}
+                    ${showHop ? `<div class="row" style="flex:1 1 100%;"><label>跳跃范围</label><div style="display:flex;align-items:center;gap:8px;width:100%;"><input type="text" value="${escHtml(item.hop_start || '60000')}" placeholder="起始" data-field="hop_start" style="flex:1;" /> <span>至</span> <input type="text" value="${escHtml(item.hop_end || '65000')}" placeholder="结束" data-field="hop_end" style="flex:1;" /></div></div>` : ''}
                 ` : ''}
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
@@ -550,7 +725,7 @@ footer a { color: var(--acc); }
                         <div class="row"><label>密码</label><input type="text" value="${escHtml(item.socks_pass || '')}" placeholder="可选" data-field="socks_pass" style="flex:1;" /></div>
                     </div>
                 ` : ''}
-                <div class="row"><label>路由匹配</label><input type="text" value="${escHtml(item.outbound_match || '{"ip_cidr":["0.0.0.0/0","::/0"]}')}" placeholder='{"ip_cidr":["0.0.0.0/0","::/0"]}' data-field="outbound_match" style="flex:2;" /></div>
+                <div class="row" style="flex: 2 1 300px;"><label>路由匹配</label><input type="text" value="${escHtml(item.outbound_match || '{"ip_cidr":["0.0.0.0/0","::/0"]}')}" placeholder='{"ip_cidr":["0.0.0.0/0","::/0"]}' data-field="outbound_match" style="flex:2;" /></div>
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
@@ -582,7 +757,7 @@ footer a { color: var(--acc); }
         return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
-                <div class="row"><label>Argo Token</label><input type="text" value="${escHtml(item.argo_token)}" placeholder="ey 开头的 Token" data-field="argo_token" style="flex:2;" /></div>
+                <div class="row" style="flex:2 1 300px;"><label>Argo Token</label><input type="text" value="${escHtml(item.argo_token)}" placeholder="ey 开头的 Token" data-field="argo_token" style="flex:2;" /></div>
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
@@ -597,7 +772,31 @@ footer a { color: var(--acc); }
 
     function handleDynamicChange(e) {
         syncDataFromDOM();
-        renderAll();
+        
+        const entryItem = e.target.closest('.entry-item');
+        if (entryItem) {
+            const type = entryItem.dataset.type;
+            const idx = parseInt(entryItem.dataset.idx, 10);
+            const item = entries[type][idx];
+            const map = moduleMap[type];
+            
+            if (map && item !== undefined) {
+                const activeEl = document.activeElement;
+                const fieldKey = activeEl ? activeEl.dataset.field : null;
+                
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = map.fn(item, idx, type);
+                const newEntryItem = tempDiv.firstElementChild;
+                
+                entryItem.parentNode.replaceChild(newEntryItem, entryItem);
+                bindDynamicSelects();
+                
+                if (fieldKey) {
+                    const target = newEntryItem.querySelector(`[data-field="${fieldKey}"]`);
+                    if (target) target.focus();
+                }
+            }
+        }
         generateCommands();
     }
 
@@ -630,17 +829,16 @@ footer a { color: var(--acc); }
             default: return;
         }
         entries[type].push(defaultItem);
-        renderAll();
+        renderModuleList(type);
         generateCommands();
     }
 
     function removeEntry(type, idx) {
         entries[type].splice(idx, 1);
-        renderAll();
+        renderModuleList(type);
         generateCommands();
     }
 
-    // ---- 同步 ----
     function syncDataFromDOM() {
         document.querySelectorAll('.entry-item').forEach(el => {
             const type = el.dataset.type;
@@ -656,11 +854,7 @@ footer a { color: var(--acc); }
         });
     }
 
-    // ---- 校验 ----
-    function validateCert(item) {
-        return item.domain && item.domain.trim() !== '';
-    }
-
+    function validateCert(item) { return item.domain && item.domain.trim() !== ''; }
     function validateInbound(item) {
         const proto = parseInt(item.inbound_type, 10);
         if ([3,4,5].includes(proto)) {
@@ -668,28 +862,16 @@ footer a { color: var(--acc); }
         }
         return true;
     }
-
     function validateOutbound(item) {
         if (!item.outbound_type) return false;
         if (!item.outbound_match || item.outbound_match.trim() === '') return false;
         return true;
     }
-
-    function validateCfDns(item) {
-        return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '';
-    }
-
+    function validateCfDns(item) { return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== ''; }
     function validateCfOriginRule(item) {
-        return item.domain && item.domain.trim() !== '' &&
-               item.zone_id && item.zone_id.trim() !== '' &&
-               item.ws_path && item.ws_path.trim() !== '' &&
-               item.port && item.port.trim() !== '';
+        return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '' && item.ws_path && item.ws_path.trim() !== '' && item.port && item.port.trim() !== '';
     }
-
-    function validateCfArgo(item) {
-        return item.domain && item.domain.trim() !== '' &&
-               item.argo_token && item.argo_token.trim() !== '';
-    }
+    function validateCfArgo(item) { return item.domain && item.domain.trim() !== '' && item.argo_token && item.argo_token.trim() !== ''; }
 
     function isValidEntry(type, item) {
         switch(type) {
@@ -712,25 +894,27 @@ footer a { color: var(--acc); }
         return false;
     }
 
-    // ---- 生成命令 ----
     function generateCommands() {
         syncDataFromDOM();
 
         const cfKey = globalCfKey.value.trim();
         const cfEmail = globalCfEmail.value.trim();
 
+        localStorage.setItem('xsb_entries', JSON.stringify(entries));
+        localStorage.setItem('xsb_cf_key', cfKey);
+        localStorage.setItem('xsb_cf_email', cfEmail);
+        localStorage.setItem('xsb_include_tune', includeTune.checked);
+        localStorage.setItem('xsb_include_install', includeInstall.checked);
+
         let cmdType = 'curl';
         cmdTypeRadios.forEach(r => { if (r.checked) cmdType = r.value; });
-        const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
+        localStorage.setItem('xsb_cmd_type', cmdType);
 
+        const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
         let allCommands = [];
         const taskMap = {
-            cert: 'cert',
-            inbound: 'inbound',
-            outbound: 'outbound',
-            cf_dns: 'cf_dns',
-            cf_origin_rule: 'cf_origin_rule',
-            cf_argo: 'cf_argo'
+            cert: 'cert', inbound: 'inbound', outbound: 'outbound',
+            cf_dns: 'cf_dns', cf_origin_rule: 'cf_origin_rule', cf_argo: 'cf_argo'
         };
 
         const needCf = (type, item) => {
@@ -752,6 +936,7 @@ footer a { color: var(--acc); }
 
         if (hasMissingCf) {
             outputCmd.value = '⚠️ 检测到需要 Cloudflare 凭证的任务，请填写 CF_Key 和 CF_Email。';
+            singleCmdList.innerHTML = '<div style="color:var(--err); font-size:13px; text-align:center; padding:10px;">⚠️ 请先填写 Cloudflare 凭证</div>';
             return;
         }
 
@@ -773,13 +958,8 @@ footer a { color: var(--acc); }
                     case 'cert': {
                         if (item.domain) vars.DOMAIN = item.domain;
                         if (item.acme_mode) vars.ACME_MODE = item.acme_mode;
-                        if (parseInt(item.acme_mode,10) === 1 && item.web_port) {
-                            vars.WEB_PORT = item.web_port;
-                        }
-                        if (parseInt(item.acme_mode,10) === 2) {
-                            vars.CF_Key = cfKey;
-                            vars.CF_Email = cfEmail;
-                        }
+                        if (parseInt(item.acme_mode,10) === 1 && item.web_port) vars.WEB_PORT = item.web_port;
+                        if (parseInt(item.acme_mode,10) === 2) { vars.CF_Key = cfKey; vars.CF_Email = cfEmail; }
                         break;
                     }
                     case 'inbound': {
@@ -788,23 +968,16 @@ footer a { color: var(--acc); }
                         if (item.port && item.port.trim() !== '') vars.PORT = item.port;
 
                         switch(proto) {
-                            case 1: // VLESS+Reality
+                            case 1:
+                            case 2:
                                 if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.reality_sni && item.reality_sni.trim() !== '') {
-                                    vars.REALITY_SERVER_NAME = item.reality_sni;
-                                }
+                                if (item.reality_sni && item.reality_sni.trim() !== '') vars.REALITY_SERVER_NAME = item.reality_sni;
                                 break;
-                            case 2: // AnyTLS+Reality
-                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.reality_sni && item.reality_sni.trim() !== '') {
-                                    vars.REALITY_SERVER_NAME = item.reality_sni;
-                                }
-                                break;
-                            case 3: // AnyTLS+TLS
+                            case 3:
                                 if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
                                 if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
                                 break;
-                            case 4: // Hysteria2
+                            case 4:
                                 if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
                                 if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
                                 if (item.enable_hop) vars.ENABLE_HOP = item.enable_hop;
@@ -813,16 +986,14 @@ footer a { color: var(--acc); }
                                     if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END = item.hop_end;
                                 }
                                 break;
-                            case 5: // VMess+WSS
+                            case 5:
                                 if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
                                 if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
                                 if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item.ws_path;
                                 break;
-                            case 6: // Shadowsocks
+                            case 6:
                                 if (item.ss_method) vars.METHOD = item.ss_method;
                                 if (item.uuid && item.uuid.trim() !== '') vars.PASSWORD = item.uuid;
-                                break;
-                            default:
                                 break;
                         }
                         break;
@@ -842,8 +1013,7 @@ footer a { color: var(--acc); }
                     case 'cf_dns': {
                         if (item.domain) vars.DOMAIN = item.domain;
                         if (item.zone_id) vars.ZONE_ID = item.zone_id;
-                        vars.CF_Key = cfKey;
-                        vars.CF_Email = cfEmail;
+                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
                         break;
                     }
                     case 'cf_origin_rule': {
@@ -851,22 +1021,24 @@ footer a { color: var(--acc); }
                         if (item.zone_id) vars.ZONE_ID = item.zone_id;
                         if (item.ws_path) vars.WS_PATH = item.ws_path;
                         if (item.port) vars.PORT = item.port;
-                        vars.CF_Key = cfKey;
-                        vars.CF_Email = cfEmail;
+                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
                         break;
                     }
                     case 'cf_argo': {
                         if (item.domain) vars.DOMAIN = item.domain;
                         if (item.argo_token) vars.ARGO_TOKEN = item.argo_token;
-                        vars.CF_Key = cfKey;
-                        vars.CF_Email = cfEmail;
+                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
                         break;
                     }
                 }
                 const varParts = [];
                 for (const [k, v] of Object.entries(vars)) {
                     if (v !== undefined && v !== '') {
-                        const escaped = String(v).replace(/"/g, '\\"');
+                        const escaped = String(v)
+                            .replace(/\\/g, '\\\\')
+                            .replace(/"/g, '\\"')
+                            .replace(/\$/g, '\\$')
+                            .replace(/`/g, '\\`');
                         varParts.push(`${k}="${escaped}"`);
                     }
                 }
@@ -878,55 +1050,105 @@ footer a { color: var(--acc); }
             });
         }
 
-        // ---- tune ----
         if (includeTune.checked && hasTask) {
             allCommands.push(`# tune (TCP 智能调优)\nXSB_TASKS="tune" bash <(${fetchCmd})`);
         }
 
         if (allCommands.length === 0) {
             outputCmd.value = '⚠️ 没有有效的配置条目，请确保必填字段均已填写。';
+            singleCmdList.innerHTML = '<div style="color:var(--sub); font-size:13px; text-align:center; padding:10px;">暂无有效命令</div>';
             return;
         }
 
         outputCmd.value = allCommands.join('\n\n');
+
+        singleCmdList.innerHTML = allCommands.map(fullCmd => {
+            const lines = fullCmd.split('\n');
+            const comment = lines[0] || '';
+            const code = lines.slice(1).join('\n') || '';
+            const safeCode = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            return `
+                <div class="single-cmd-item">
+                    <div class="single-cmd-header">
+                        <span class="single-cmd-title">${escHtml(comment)}</span>
+                        <div class="single-cmd-actions">
+                            <button class="single-copy-btn" data-clipboard="${safeCode}">📋 复制此条</button>
+                        </div>
+                    </div>
+                    <div class="single-cmd-body">${escHtml(code)}</div>
+                </div>
+            `;
+        }).join('');
     }
 
-    // ---- 复制 ----
     function copyAll() {
         const text = outputCmd.value;
         if (!text || text.startsWith('⚠️')) {
             copyFeedback.textContent = '⚠️ 无有效命令';
+            copyFeedback.style.color = 'var(--err)';
             copyFeedback.classList.add('show');
             setTimeout(() => copyFeedback.classList.remove('show'), 2000);
             return;
         }
         navigator.clipboard.writeText(text).then(() => {
-            copyFeedback.textContent = '✅ 已复制';
+            copyFeedback.textContent = '✅ 已复制到剪贴板';
+            copyFeedback.style.color = 'var(--ok)';
             copyFeedback.classList.add('show');
             setTimeout(() => copyFeedback.classList.remove('show'), 2500);
         }).catch(() => {
             outputCmd.select();
             document.execCommand('copy');
-            copyFeedback.textContent = '✅ 已复制';
+            copyFeedback.textContent = '✅ 已复制到剪贴板';
+            copyFeedback.style.color = 'var(--ok)';
             copyFeedback.classList.add('show');
             setTimeout(() => copyFeedback.classList.remove('show'), 2500);
         });
     }
 
-    // ---- 重置 ----
     function resetAll() {
-        if (!confirm('清空所有已添加的条目？')) return;
+        if (!confirm('清空所有已添加的条目并清除缓存？')) return;
         entries = { cert: [], inbound: [], outbound: [], cf_dns: [], cf_origin_rule: [], cf_argo: [] };
+        globalCfKey.value = '';
+        globalCfEmail.value = '';
+        localStorage.removeItem('xsb_entries');
+        localStorage.removeItem('xsb_cf_key');
+        localStorage.removeItem('xsb_cf_email');
         renderAll();
         generateCommands();
     }
 
-    // ---- 事件绑定 ----
-    btnGenerate.addEventListener('click', generateCommands);
     btnCopy.addEventListener('click', copyAll);
     btnReset.addEventListener('click', resetAll);
     includeTune.addEventListener('change', generateCommands);
     includeInstall.addEventListener('change', generateCommands);
+
+    singleCmdList.addEventListener('click', function(e) {
+        const btn = e.target.closest('.single-copy-btn');
+        if (!btn) return;
+        const textToCopy = btn.dataset.clipboard;
+        if (!textToCopy) return;
+
+        const performCopy = () => {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ 已复制';
+            btn.style.color = 'var(--ok)';
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.color = 'var(--acc)';
+            }, 1500);
+        };
+
+        navigator.clipboard.writeText(textToCopy).then(performCopy).catch(() => {
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            performCopy();
+        });
+    });
 
     let timer;
     document.addEventListener('input', function(e) {
@@ -944,9 +1166,27 @@ footer a { color: var(--acc); }
 
     cmdTypeRadios.forEach(r => r.addEventListener('change', generateCommands));
 
-    // ---- 初始化 ----
     function init() {
         initTheme();
+
+        const savedEntries = localStorage.getItem('xsb_entries');
+        if (savedEntries) {
+            try { entries = JSON.parse(savedEntries); } catch(e) { console.error('解析缓存失败:', e); }
+        }
+        globalCfKey.value = localStorage.getItem('xsb_cf_key') || '';
+        globalCfEmail.value = localStorage.getItem('xsb_cf_email') || '';
+        
+        if (localStorage.getItem('xsb_include_tune') !== null) {
+            includeTune.checked = localStorage.getItem('xsb_include_tune') === 'true';
+        }
+        if (localStorage.getItem('xsb_include_install') !== null) {
+            includeInstall.checked = localStorage.getItem('xsb_include_install') === 'true';
+        }
+        const savedCmdType = localStorage.getItem('xsb_cmd_type');
+        if (savedCmdType) {
+            cmdTypeRadios.forEach(r => { r.checked = (r.value === savedCmdType); });
+        }
+
         renderAll();
         generateCommands();
     }
