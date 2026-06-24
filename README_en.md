@@ -2,19 +2,19 @@
 
 Language: English | [简体中文](README.md)
 
-> All-in-one Sing-box proxy node management script, integrating certificate management, inbound/outbound configuration, routing rules, Brutal installation, port hopping, TCP intelligent tuning, Cloudflare DNS management, Cloudflare origin rules, Argo tunnel setup, and Alpine Linux support.  
-> **New**: Supports **environment-variable-driven rapid deployment**, and works with a Web Generator to produce one-click multi-task command lists.
+> An all-in-one Sing-box proxy node management script that integrates certificate management, inbound/outbound configuration, routing rules, Brutal installation, port hopping, TCP intelligent tuning, Cloudflare DNS management, Cloudflare Origin Rules, Argo tunnel setup, and Alpine Linux support.  
+> **New**: Supports **environment-variable-driven rapid deployment** and works with a Web Generator to produce one-click multi-task command lists.
 
 ---
 
 ## 📋 Introduction
 
-`xsb.sh` is designed for rapid deployment and management of **Sing-box** proxy nodes. It adopts a modular architecture, with all configuration files stored under `~/xsb/`. Two usage modes are provided:
+`xsb.sh` is built for rapid deployment and management of **Sing-box** proxy nodes. It uses a modular architecture, with all configuration files stored under `~/xsb/`. Two usage modes are available:
 
-- **Interactive Menu**: Suitable for manual step-by-step configuration, intuitive and straightforward.
-- **Non-interactive Task Mode**: Specify tasks via the `XSB_TASKS` environment variable, ideal for automated deployment (can be used with the Web Generator).
+- **Interactive Menu**: Step through configuration manually – intuitive and straightforward.
+- **Non-interactive Task Mode**: Define tasks via the `XSB_TASKS` environment variable – ideal for automated deployment (can be combined with the Web Generator).
 
-You can use the **Web Generator** provided in this repository ([https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)) to generate the required command list online, then copy and execute it on your server for one‑click rapid deployment.
+You can use the **Web Generator** provided in this repository ([https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)) to generate the required command list online, then copy and paste it on your server for one‑click rapid deployment.
 
 ### Core Features
 
@@ -49,14 +49,14 @@ chmod +x xsb.sh
 ./xsb.sh
 ```
 
-After running, the main menu will appear; follow the on‑screen instructions.
+After running, the main menu appears; follow the on‑screen instructions.
 
 ### Non‑interactive Task Mode (Rapid Deployment)
 
-You can specify a list of tasks via the `XSB_TASKS` environment variable (comma‑separated). The script will execute them in order and automatically build the configuration and start the service.
+You can specify a comma‑separated list of tasks via the `XSB_TASKS` environment variable. The script executes them in order, then automatically builds the configuration and starts the service.
 
 ```bash
-# Example: Install + obtain certificate
+# Example: Install + Issue
 XSB_TASKS="install,cert" \
 DOMAIN="example.com" \
 ACME_MODE="2" \
@@ -115,21 +115,8 @@ bash <(curl -Ls https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/m
 | 5     | VMess+WSS |
 | 6     | Shadowsocks |
 
-> 💡 It is recommended to use the **Web Generator** – no need to remember variables manually. Generate commands via a simple form:  
+> 💡 We recommend using the **Web Generator** – no need to remember variables manually. Generate commands via a simple form:  
 > [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
-
----
-
-## 🌐 Web Generator
-
-This project provides a **visual command generator** to help you quickly generate a complete deployment command list by filling out a form. Steps:
-
-1. Visit [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
-2. Add certificate, inbound, outbound, Cloudflare configurations, etc., as needed
-3. Click "Generate Commands" and copy the full list
-4. Execute on your server (as root) in order
-
-The generator automatically adds `install` and `tune` tasks and intelligently validates Cloudflare credentials to ensure complete and correct commands.
 
 ---
 
