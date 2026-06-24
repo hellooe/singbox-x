@@ -3,7 +3,7 @@
 语言：[English](README_en.md) | 简体中文
 
 > 一站式 Sing-box 代理节点管理工具，集成了证书管理、入站/出站配置、路由分流、Brutal 安装、端口跳跃、TCP 智能调优、Cloudflare DNS 管理、端口回源与 Argo 隧道配置，并支持 Alpine Linux。  
-> **新增**：支持**环境变量驱动的快速部署**，配合 Web 生成器可一键生成多任务命令列表。
+> **新增**：支持**环境变量驱动的快速部署**，配合 Web 命令生成器可一键生成多任务命令列表。
 
 ---
 
@@ -14,7 +14,7 @@
 - **交互式菜单**：适合手动逐项配置，简单直观。
 - **非交互式任务模式**：通过 `XSB_TASKS` 环境变量指定任务列表，适合自动化部署（可与 Web 生成器配合使用）。
 
-您可以使用本仓库提供的 **Web 生成器**（[https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)）在线生成所需的命令列表，一键复制后到服务器执行，实现一键快速部署。
+您可以使用本仓库提供的 **Web 命令生成器**（[https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)）在线生成所需的命令列表，一键复制后到服务器执行，实现一键快速部署。
 
 ### 核心功能一览
 
@@ -117,19 +117,6 @@ bash <(curl -Ls https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/m
 
 > 💡 推荐配合 **Web 生成器** 使用，无需手动记忆变量，直接通过表单生成命令：  
 > [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
-
----
-
-## 🌐 Web 生成器
-
-本项目提供了一个**可视化命令生成器**，帮助您通过填写表单，快速生成完整的部署命令列表。您只需：
-
-1. 访问 [https://hellooe.github.io/singbox-x/](https://hellooe.github.io/singbox-x/)
-2. 按需添加证书、入站、出站、Cloudflare 配置等条目
-3. 点击「生成命令」复制全部命令
-4. 在服务器（root）顺序执行即可
-
-生成器支持自动添加 `install` 和 `tune` 任务，并智能校验 Cloudflare 凭证，确保命令完整无误。
 
 ---
 
