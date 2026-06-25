@@ -576,35 +576,40 @@ cf_argo() {
     [[ -z "$ARGO_TOKEN" ]] && { echo -e "${RED}Token 不能为空${PLAIN}"; return 1; }
     echo "$ARGO_TOKEN" > "$XSB_DIR/conf/argo_token" && chmod 600 "$XSB_DIR/conf/argo_token"
     if [[ "$OS" == "alpine" ]]; then
-        cat > /etc/init.d/argo-tunnel <<EOF
+        if [[ ! -f /etc/init.d/argo-tunnel ]]; then
+            cat > /etc/init.d/argo-tunnel <<EOF
 #!/sbin/openrc-run
 command="$XSB_DIR/bin/cloudflared"
-command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $XSB_DIR/conf/argo_token"
+command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file \"$XSB_DIR/conf/argo_token\""
 command_user="root"
 pidfile="/run/argo-tunnel.pid"
 name="Cloudflare Argo Tunnel"
 description="Cloudflare Argo Tunnel ($DOMAIN)"
+start_stop_daemon_args="--background --make-pidfile"
 depend() { need net; }
 EOF
-        chmod +x /etc/init.d/argo-tunnel
-        rc-update add argo-tunnel default 2>/dev/null
+            chmod +x /etc/init.d/argo-tunnel
+            rc-update add argo-tunnel default 2>/dev/null
+        fi
         rc-service argo-tunnel restart
     else
-        cat > /etc/systemd/system/argo-tunnel.service <<EOF
+        if [[ ! -f /etc/systemd/system/argo-tunnel.service ]]; then
+            cat > /etc/systemd/system/argo-tunnel.service <<EOF
 [Unit]
 Description=Cloudflare Argo Tunnel ($DOMAIN)
 After=network.target
 [Service]
 Type=simple
-ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file $XSB_DIR/conf/argo_token
+ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file "$XSB_DIR/conf/argo_token"
 Restart=on-failure
 RestartSec=10s
 User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload
-        systemctl enable argo-tunnel 2>/dev/null
+            systemctl daemon-reload
+            systemctl enable argo-tunnel 2>/dev/null
+        fi
         systemctl restart argo-tunnel
     fi
     echo -e "${GREEN}已创建 Argo 隧道服务${PLAIN}"
@@ -627,9 +632,15 @@ tcp_tune() {
     echo -e "${GREEN}测速中...${PLAIN}"
     LANG=C speedtest_output=$("$XSB_DIR/bin/speedtest" --accept-license --accept-gdpr --server-id="$SERVER_ID" 2>&1)
     echo "$speedtest_output"
-    UPLOAD=$(echo "$speedtest_output" | awk -F': ' '/Upload:/ {print $2}' | awk '{print $1}')
+    UPLOAD=$(echo "$speedtest_output" | awk -F': ' '/Upload:/ {printf("%.0f", $2)}')
     [[ -z "$UPLOAD" ]] && UPLOAD=$(get_or_ask "TUNE_BANDWIDTH" "手动输入带宽 (Mbit/s)" "100")
     BUFFER_MB=$(( ($(echo "$UPLOAD" | awk '{printf("%.0f", $1)}') / 8 + 3) / 4 * 4 ))
+    [ $BUFFER_MB -lt 8 ] && BUFFER_MB=8
+    HARD_LIMIT_MB=128
+    TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+    MAX_ALLOWED_MB=$(( TOTAL_RAM_MB / 4 ))
+    [ $MAX_ALLOWED_MB -gt $HARD_LIMIT_MB ] && MAX_ALLOWED_MB=$HARD_LIMIT_MB
+    [ $BUFFER_MB -gt $MAX_ALLOWED_MB ] && BUFFER_MB=$MAX_ALLOWED_MB
     BUFFER_BYTES=$((BUFFER_MB * 1024 * 1024))
     cat > /etc/sysctl.d/99-tcp.conf <<EOF
 kernel.panic = 10
@@ -714,7 +725,8 @@ build_and_start() {
         return 1
     fi
     if [[ "$OS" == "alpine" ]]; then
-        cat > /etc/init.d/sing-box <<EOF
+        if [[ ! -f /etc/init.d/sing-box ]]; then
+            cat > /etc/init.d/sing-box <<EOF
 #!/sbin/openrc-run
 command="$XSB_DIR/bin/sing-box"
 command_args="run -c $XSB_DIR/conf/config.json"
@@ -722,13 +734,16 @@ command_user="root"
 pidfile="/run/sing-box.pid"
 name="Sing-box"
 description="Sing-box Service"
+start_stop_daemon_args="--background --make-pidfile"
 depend() { need net; }
 EOF
-        chmod +x /etc/init.d/sing-box
-        rc-update add sing-box default 2>/dev/null
+            chmod +x /etc/init.d/sing-box
+            rc-update add sing-box default 2>/dev/null
+        fi
         rc-service sing-box restart
     else
-        cat > /etc/systemd/system/sing-box.service <<EOF
+        if [[ ! -f /etc/systemd/system/sing-box.service ]]; then
+            cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
 Description=Sing-box Service
 After=network.target
@@ -740,8 +755,9 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload
-        systemctl enable sing-box 2>/dev/null
+            systemctl daemon-reload
+            systemctl enable sing-box 2>/dev/null
+        fi
         systemctl restart sing-box
     fi
     echo -e "${GREEN}已创建 sing-box 服务${PLAIN}"
