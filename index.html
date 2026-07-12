@@ -845,6 +845,7 @@
 
             function renderOutboundEntry(item, idx, type) {
                 const isSocks = (item.outbound_type == 1);
+                const isWarp = (item.outbound_type == 2);
                 return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>类型</label>
@@ -855,13 +856,18 @@
                 </div>
                 ${isSocks ? `
                     <div class="socks-row-group">
-                        <div class="row"><label>服务器</label><input type="text" value="${escHtml(item.socks_server || '127.0.0.1')}" placeholder="127.0.0.1" data-field="socks_server" style="flex:1;" /></div>
-                        <div class="row"><label>端口</label><input type="text" value="${escHtml(item.socks_port || '1080')}" placeholder="1080" data-field="socks_port" style="flex:1;" /></div>
+                        <div class="row"><label>服务器</label><input type="text" value="${escHtml(item.socks_server || '')}" placeholder="127.0.0.1" data-field="socks_server" style="flex:1;" /></div>
+                        <div class="row"><label>端口</label><input type="text" value="${escHtml(item.socks_port || '')}" placeholder="1080" data-field="socks_port" style="flex:1;" /></div>
                     </div>
                     <div class="socks-row-group">
                         <div class="row"><label>用户名</label><input type="text" value="${escHtml(item.socks_user || '')}" placeholder="可选" data-field="socks_user" style="flex:1;" /></div>
                         <div class="row"><label>密码</label><input type="text" value="${escHtml(item.socks_pass || '')}" placeholder="可选" data-field="socks_pass" style="flex:1;" /></div>
                     </div>
+                ` : ''}
+                ${isWarp ? `
+                    <div class="row"><label>WARP Private Key</label><input type="text" value="${escHtml(item.warp_private_key || '')}" placeholder="52cuYFgCJXp0LAq7+nWJIbCXXgU9eGggOc+Hlfz5u6A=" data-field="warp_private_key" /></div>
+                    <div class="row"><label>WARP IPv6 地址</label><input type="text" value="${escHtml(item.warp_ipv6 || '')}" placeholder="2606:4700:110:8d8d:1845:c39f:2dd5:a03a" data-field="warp_ipv6" /></div>
+                    <div class="row"><label>WARP Reserved</label><input type="text" value="${escHtml(item.warp_reserved || '')}" placeholder="[215, 69, 233]" data-field="warp_reserved" /></div>
                 ` : ''}
                 <div class="row" style="flex: 2 1 300px;"><label>路由匹配</label><input type="text" value="${escHtml(item.outbound_match || '{"ip_cidr":["0.0.0.0/0","::/0"]}')}" placeholder='{"ip_cidr":["0.0.0.0/0","::/0"]}' data-field="outbound_match" style="flex:2;" /></div>
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
@@ -958,13 +964,39 @@
             function addEntry(type) {
                 let defaultItem = {};
                 switch (type) {
-                    case 'cert': defaultItem = { domain: '', acme_mode: 2, web_port: '80' }; break;
-                    case 'inbound': defaultItem = { inbound_type: 1, port: '0', uuid: '', reality_sni: '', cert_domain: '', ws_path: '', ss_method: 2, enable_hop: 'n', hop_start: '60000', hop_end: '65000' }; break;
-                    case 'outbound': defaultItem = { outbound_type: 1, socks_server: '127.0.0.1', socks_port: '1080', socks_user: '', socks_pass: '', outbound_match: '{"ip_cidr":["0.0.0.0/0","::/0"]}' }; break;
-                    case 'cf_dns': defaultItem = { domain: '', zone_id: '' }; break;
-                    case 'cf_origin_rule': defaultItem = { domain: '', zone_id: '', ws_path: '', port: '' }; break;
-                    case 'cf_argo': defaultItem = { tunnel_name: '', argo_token: '' }; break;
-                    default: return;
+                    case 'cert':
+                        defaultItem = { domain: '', acme_mode: 2, web_port: '80' };
+                        break;
+                    case 'inbound':
+                        defaultItem = {
+                            inbound_type: 1, port: '0', uuid: '', reality_sni: '', cert_domain: '', ws_path: '',
+                            ss_method: 2, enable_hop: 'n', hop_start: '60000', hop_end: '65000'
+                        };
+                        break;
+                    case 'outbound':
+                        defaultItem = {
+                            outbound_type: 1,
+                            socks_server: '',
+                            socks_port: '',
+                            socks_user: '',
+                            socks_pass: '',
+                            warp_private_key: '',
+                            warp_ipv6: '',
+                            warp_reserved: '',
+                            outbound_match: '{"ip_cidr":["0.0.0.0/0","::/0"]}'
+                        };
+                        break;
+                    case 'cf_dns':
+                        defaultItem = { domain: '', zone_id: '' };
+                        break;
+                    case 'cf_origin_rule':
+                        defaultItem = { domain: '', zone_id: '', ws_path: '', port: '' };
+                        break;
+                    case 'cf_argo':
+                        defaultItem = { tunnel_name: '', argo_token: '' };
+                        break;
+                    default:
+                        return;
                 }
                 entries[type].push(defaultItem);
                 renderModuleList(type);
@@ -993,6 +1025,7 @@
             }
 
             function validateCert(item) { return item.domain && item.domain.trim() !== ''; }
+
             function validateInbound(item) {
                 const proto = parseInt(item.inbound_type, 10);
                 if ([3, 4, 5].includes(proto)) {
@@ -1000,26 +1033,56 @@
                 }
                 return true;
             }
+
             function validateOutbound(item) {
-                if (!item.outbound_type) return false;
+                const type = parseInt(item.outbound_type, 10);
+                if (!type) return false;
                 if (!item.outbound_match || item.outbound_match.trim() === '') return false;
+
+                if (type === 1) {
+                    if (!item.socks_server || item.socks_server.trim() === '') return false;
+                    if (!item.socks_port || item.socks_port.trim() === '') return false;
+                } else if (type === 2) {
+                    if (!item.warp_private_key || item.warp_private_key.trim() === '') return false;
+                    if (!item.warp_ipv6 || item.warp_ipv6.trim() === '') return false;
+                    if (!item.warp_reserved || item.warp_reserved.trim() === '') return false;
+                } else {
+                    return false;
+                }
                 return true;
             }
-            function validateCfDns(item) { return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== ''; }
-            function validateCfOriginRule(item) {
-                return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '' && item.ws_path && item.ws_path.trim() !== '' && item.port && item.port.trim() !== '';
+
+            function validateCfDns(item) {
+                return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id
+                    .trim() !== '';
             }
-            function validateCfArgo(item) { return item.tunnel_name && item.tunnel_name.trim() !== '' && item.argo_token && item.argo_token.trim() !== ''; }
+
+            function validateCfOriginRule(item) {
+                return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '' && item.ws_path &&
+                    item.ws_path.trim() !== '' && item.port && item.port.trim() !== '';
+            }
+
+            function validateCfArgo(item) {
+                return item.tunnel_name && item.tunnel_name.trim() !== '' && item.argo_token && item
+                    .argo_token.trim() !== '';
+            }
 
             function isValidEntry(type, item) {
                 switch (type) {
-                    case 'cert': return validateCert(item);
-                    case 'inbound': return validateInbound(item);
-                    case 'outbound': return validateOutbound(item);
-                    case 'cf_dns': return validateCfDns(item);
-                    case 'cf_origin_rule': return validateCfOriginRule(item);
-                    case 'cf_argo': return validateCfArgo(item);
-                    default: return false;
+                    case 'cert':
+                        return validateCert(item);
+                    case 'inbound':
+                        return validateInbound(item);
+                    case 'outbound':
+                        return validateOutbound(item);
+                    case 'cf_dns':
+                        return validateCfDns(item);
+                    case 'cf_origin_rule':
+                        return validateCfOriginRule(item);
+                    case 'cf_argo':
+                        return validateCfArgo(item);
+                    default:
+                        return false;
                 }
             }
 
@@ -1051,8 +1114,12 @@
                 const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
                 let allCommands = [];
                 const taskMap = {
-                    cert: 'cert', inbound: 'inbound', outbound: 'outbound',
-                    cf_dns: 'cf_dns', cf_origin_rule: 'cf_origin_rule', cf_argo: 'cf_argo'
+                    cert: 'cert',
+                    inbound: 'inbound',
+                    outbound: 'outbound',
+                    cf_dns: 'cf_dns',
+                    cf_origin_rule: 'cf_origin_rule',
+                    cf_argo: 'cf_argo'
                 };
 
                 const needCf = (type, item) => {
@@ -1074,7 +1141,8 @@
 
                 if (hasMissingCf) {
                     outputCmd.value = '⚠️ 检测到需要 Cloudflare 凭证的任务，请填写 CF_Key 和 CF_Email。';
-                    singleCmdList.innerHTML = '<div style="color:var(--err); font-size:13px; text-align:center; padding:10px;">⚠️ 请先填写 Cloudflare 凭证</div>';
+                    singleCmdList.innerHTML =
+                        '<div style="color:var(--err); font-size:13px; text-align:center; padding:10px;">⚠️ 请先填写 Cloudflare 凭证</div>';
                     return;
                 }
 
@@ -1096,8 +1164,12 @@
                             case 'cert': {
                                 if (item.domain) vars.DOMAIN = item.domain;
                                 if (item.acme_mode) vars.ACME_MODE = item.acme_mode;
-                                if (parseInt(item.acme_mode, 10) === 1 && item.web_port) vars.WEB_PORT = item.web_port;
-                                if (parseInt(item.acme_mode, 10) === 2) { vars.CF_Key = cfKey; vars.CF_Email = cfEmail; }
+                                if (parseInt(item.acme_mode, 10) === 1 && item.web_port) vars.WEB_PORT = item
+                                    .web_port;
+                                if (parseInt(item.acme_mode, 10) === 2) {
+                                    vars.CF_Key = cfKey;
+                                    vars.CF_Email = cfEmail;
+                                }
                                 break;
                             }
                             case 'inbound': {
@@ -1109,7 +1181,8 @@
                                     case 1:
                                     case 2:
                                         if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                        if (item.reality_sni && item.reality_sni.trim() !== '') vars.REALITY_SERVER_NAME = item.reality_sni;
+                                        if (item.reality_sni && item.reality_sni.trim() !== '') vars
+                                            .REALITY_SERVER_NAME = item.reality_sni;
                                         break;
                                     case 3:
                                         if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
@@ -1120,14 +1193,17 @@
                                         if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
                                         if (item.enable_hop) vars.ENABLE_HOP = item.enable_hop;
                                         if (item.enable_hop === 'y') {
-                                            if (item.hop_start && item.hop_start.trim() !== '') vars.HY2_HOP_START = item.hop_start;
-                                            if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END = item.hop_end;
+                                            if (item.hop_start && item.hop_start.trim() !== '') vars
+                                                .HY2_HOP_START = item.hop_start;
+                                            if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END =
+                                                item.hop_end;
                                         }
                                         break;
                                     case 5:
                                         if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
                                         if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
-                                        if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item.ws_path;
+                                        if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item
+                                            .ws_path;
                                         break;
                                     case 6:
                                         if (item.ss_method) vars.METHOD = item.ss_method;
@@ -1140,18 +1216,31 @@
                                 const obType = parseInt(item.outbound_type, 10);
                                 vars.OUTBOUND_TYPE = obType;
                                 if (item.outbound_match) vars.OUTBOUND_MATCH = item.outbound_match;
+
                                 if (obType === 1) {
-                                    if (item.socks_server && item.socks_server.trim() !== '') vars.SOCKS5_SERVER = item.socks_server;
-                                    if (item.socks_port && item.socks_port.trim() !== '') vars.SOCKS5_PORT = item.socks_port;
-                                    if (item.socks_user && item.socks_user.trim() !== '') vars.SOCKS5_USER = item.socks_user;
-                                    if (item.socks_pass && item.socks_pass.trim() !== '') vars.SOCKS5_PASS = item.socks_pass;
+                                    if (item.socks_server && item.socks_server.trim() !== '') vars
+                                        .SOCKS5_SERVER = item.socks_server;
+                                    if (item.socks_port && item.socks_port.trim() !== '') vars.SOCKS5_PORT =
+                                        item.socks_port;
+                                    if (item.socks_user && item.socks_user.trim() !== '') vars.SOCKS5_USER =
+                                        item.socks_user;
+                                    if (item.socks_pass && item.socks_pass.trim() !== '') vars.SOCKS5_PASS =
+                                        item.socks_pass;
+                                } else if (obType === 2) {
+                                    if (item.warp_private_key && item.warp_private_key.trim() !== '') vars
+                                        .WARP_PRIVATE_KEY = item.warp_private_key;
+                                    if (item.warp_ipv6 && item.warp_ipv6.trim() !== '') vars.WARP_IPV6 = item
+                                        .warp_ipv6;
+                                    if (item.warp_reserved && item.warp_reserved.trim() !== '') vars
+                                        .WARP_RESERVED = item.warp_reserved;
                                 }
                                 break;
                             }
                             case 'cf_dns': {
                                 if (item.domain) vars.DOMAIN = item.domain;
                                 if (item.zone_id) vars.ZONE_ID = item.zone_id;
-                                vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
+                                vars.CF_Key = cfKey;
+                                vars.CF_Email = cfEmail;
                                 break;
                             }
                             case 'cf_origin_rule': {
@@ -1159,7 +1248,8 @@
                                 if (item.zone_id) vars.ZONE_ID = item.zone_id;
                                 if (item.ws_path) vars.WS_PATH = item.ws_path;
                                 if (item.port) vars.PORT = item.port;
-                                vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
+                                vars.CF_Key = cfKey;
+                                vars.CF_Email = cfEmail;
                                 break;
                             }
                             case 'cf_argo': {
@@ -1193,7 +1283,8 @@
 
                 if (allCommands.length === 0) {
                     outputCmd.value = '⚠️ 没有有效的配置条目，请确保必填字段均已填写。';
-                    singleCmdList.innerHTML = '<div style="color:var(--sub); font-size:13px; text-align:center; padding:10px;">暂无有效命令</div>';
+                    singleCmdList.innerHTML =
+                        '<div style="color:var(--sub); font-size:13px; text-align:center; padding:10px;">暂无有效命令</div>';
                     return;
                 }
 
@@ -1203,7 +1294,8 @@
                     const lines = fullCmd.split('\n');
                     const comment = lines[0] || '';
                     const code = lines.slice(1).join('\n') || '';
-                    const safeCode = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const safeCode = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
 
                     return `
                 <div class="single-cmd-item">
@@ -1308,7 +1400,9 @@
 
                 const savedEntries = localStorage.getItem('xsb_entries');
                 if (savedEntries) {
-                    try { entries = JSON.parse(savedEntries); } catch (e) { console.error('解析缓存失败:', e); }
+                    try {
+                        entries = JSON.parse(savedEntries);
+                    } catch (e) { console.error('解析缓存失败:', e); }
                 }
                 globalCfKey.value = localStorage.getItem('xsb_cf_key') || '';
                 globalCfEmail.value = localStorage.getItem('xsb_cf_email') || '';

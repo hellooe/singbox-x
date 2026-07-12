@@ -10,7 +10,7 @@
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; PLAIN='\033[0m'
 XSB_DIR="$HOME/xsb"
-mkdir -p "$XSB_DIR"/{bin,cert,conf,inbounds,outbounds}
+mkdir -p "$XSB_DIR"/{bin,cert,conf,inbounds,outbounds,routes}
 export PATH="$XSB_DIR/bin:$PATH"
 XSB_CONF_FILE="$XSB_DIR/conf/env.conf"
 
@@ -219,7 +219,7 @@ add_inbound() {
         *) echo -e "${RED}无效选择${PLAIN}"; return 1 ;;
     esac
 
-    tag="inbound_$(date +%s)"
+    tag="$(date +%s)"
     PORT=$(get_or_ask "PORT" "端口 (0=随机)" "0")
 
     if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
@@ -428,7 +428,7 @@ list_outbounds() {
 
 add_outbound() {
     OUTBOUND_TYPE=$(get_or_ask "OUTBOUND_TYPE" "出站类型 (1=SOCKS5, 2=WARP)" "")
-    tag="outbound_$(date +%s)"
+    tag="$(date +%s)"
     OUTBOUND_MATCH=$(get_or_ask "OUTBOUND_MATCH" "路由匹配规则 (JSON)" '{"ip_cidr":["0.0.0.0/0","::/0"]}')
     case $OUTBOUND_TYPE in
         1)
@@ -443,21 +443,12 @@ add_outbound() {
             add_route_rule "$tag" "$OUTBOUND_MATCH"
             ;;
         2)
-            echo -e "${GREEN}获取 WARP 配置...${PLAIN}"
-            WARP_DATA=$(curl -s --max-time 5 https://warp.xijp.eu.org)
-            if [[ -z "$WARP_DATA" ]]; then
-                echo -e "${RED}无法自动获取 WARP 配置${PLAIN}"
-                WARP_PRIVATE_KEY=$(get_or_ask "WARP_PRIVATE_KEY" "请输入 WARP Private Key" "")
-                WARP_IPV6=$(get_or_ask "WARP_IPV6" "请输入 WARP IPv6 地址（不含 /128）" "")
-                WARP_RESERVED=$(get_or_ask "WARP_RESERVED" "请输入 WARP reserved（JSON 数组，如 [1,2,3]）" "")
-                if [[ -z "$WARP_PRIVATE_KEY" || -z "$WARP_IPV6" || -z "$WARP_RESERVED" ]]; then
-                    echo -e "${RED}缺少必要 WARP 参数，请配置后再试${PLAIN}"
-                    return 1
-                fi
-            else
-                WARP_PRIVATE_KEY=$(echo "$WARP_DATA" | grep Private_key | awk -F'：' '{print $2}' | xargs)
-                WARP_IPV6=$(echo "$WARP_DATA" | grep IPV6 | awk -F'：' '{print $2}' | xargs)
-                WARP_RESERVED=$(echo "$WARP_DATA" | grep reserved | awk -F'：' '{print $2}' | xargs)
+            WARP_PRIVATE_KEY=$(get_or_ask "WARP_PRIVATE_KEY" "请输入 Private Key" "")
+            WARP_IPV6=$(get_or_ask "WARP_IPV6" "请输入 IPv6 地址（不含 /128）" "")
+            WARP_RESERVED=$(get_or_ask "WARP_RESERVED" "请输入 reserved 值）" "")
+            if [[ -z "$WARP_PRIVATE_KEY" || -z "$WARP_IPV6" || -z "$WARP_RESERVED" ]]; then
+                echo -e "${RED}缺少必要 WARP 参数，请配置后再试${PLAIN}"
+                return 1
             fi
             curl -s4 --max-time 3 ifconfig.me >/dev/null 2>&1 && WARP_PEER_ADDR="162.159.192.1" || WARP_PEER_ADDR="[2606:4700:d0::a29f:c001]"
             jq -n --arg type "wireguard" --arg tag "$tag" \
@@ -480,13 +471,13 @@ add_outbound() {
 delete_outbound() {
     list_outbounds
     tag=$(get_or_ask "DELETE_OUTBOUND_TAG" "请输入要删除的出站标签" "")
-    rm -f "$XSB_DIR/outbounds/outbound_${tag}.json" "$XSB_DIR/outbounds/endpoint_${tag}.json" "$XSB_DIR/conf/routes/route_${tag}.json"
+    rm -f "$XSB_DIR/outbounds/outbound_${tag}.json" "$XSB_DIR/outbounds/endpoint_${tag}.json" "$XSB_DIR/routes/route_${tag}.json"
     echo -e "${GREEN}已删除${PLAIN}"
 }
 
 add_route_rule() {
-    mkdir -p "$XSB_DIR/conf/routes"
-    jq -n --arg outbound "$1" --argjson spec "$2" '$spec + { outbound: $outbound }' > "$XSB_DIR/conf/routes/route_${1}.json"
+    mkdir -p "$XSB_DIR/routes"
+    jq -n --arg outbound "$1" --argjson spec "$2" '$spec + { outbound: $outbound }' > "$XSB_DIR/routes/route_${1}.json"
 }
 
 cf_api_request() {
@@ -709,7 +700,7 @@ build_and_start() {
     if [[ ${#endpoints_files[@]} -gt 0 && -f "${endpoints_files[0]}" ]]; then
         endpoints_json=$(jq -s '.' "${endpoints_files[@]}" 2>/dev/null) || { echo -e "${RED}端点 JSON 合并失败${PLAIN}"; return 1; }
     fi
-    routes_files=("$XSB_DIR"/conf/routes/route_*.json)
+    routes_files=("$XSB_DIR"/routes/route_*.json)
     rules_json='[]'
     if [[ ${#routes_files[@]} -gt 0 && -f "${routes_files[0]}" ]]; then
         rules_json=$(jq -s '.' "${routes_files[@]}" 2>/dev/null) || { echo -e "${RED}路由规则合并失败${PLAIN}"; return 1; }
@@ -821,9 +812,10 @@ show_info() {
                 uuid=$(jq -r '.users[0].uuid' "$f")
                 host=$(jq -r '.transport.headers.Host' "$f")
                 path=$(jq -r '.transport.path' "$f")
-                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv4\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
+                sni=$(jq -r '.tls.server_name' "$f")
+                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv4\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"，\"sni\": \"$sni\"}"
                 [[ -n "$ipv4" ]] && echo "vmess://$(echo -n "$vmess_json" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)"
-                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv6\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"}"
+                vmess_json="{\"v\":\"2\",\"ps\":\"$tag\",\"add\":\"$ipv6\",\"port\":\"$port\",\"id\":\"$uuid\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"ws\",\"host\":\"$host\",\"path\":\"$path\",\"tls\":\"tls\"，\"sni\": \"$sni\"}"
                 [[ -n "$ipv6" ]] && echo "vmess://$(echo -n "$vmess_json" | base64 -w 0 2>/dev/null || openssl base64 -A 2>/dev/null)"
                 ;;
             shadowsocks)
@@ -909,7 +901,7 @@ if [[ -n "$XSB_TASKS" ]]; then
             *) echo -e "${RED}未知任务: $task${PLAIN}" ;;
         esac
     done
-    if [[ "$XSB_TASKS" =~ (inbound|outbound) ]] && [[ ! "$XSB_TASKS" =~ build ]]; then
+    if [[ "$XSB_TASKS" =~ inbound ]] && [[ ! "$XSB_TASKS" =~ build ]]; then
         echo -e "${YELLOW}检测到配置变更，自动构建并启动...${PLAIN}"
         build_and_start
         show_info
