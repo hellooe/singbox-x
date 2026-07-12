@@ -58,7 +58,6 @@ get_or_ask() {
     echo "$value"
 }
 
-# ---------- 系统检测 ----------
 if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}请使用 root 用户运行${PLAIN}" && exit 1
 fi
@@ -70,7 +69,6 @@ else
     echo -e "${RED}无法识别系统${PLAIN}" && exit 1
 fi
 
-# ---------- 依赖安装 ----------
 install_deps() {
     echo -e "${GREEN}安装基础依赖...${PLAIN}"
     case $OS in
@@ -80,18 +78,17 @@ install_deps() {
             ;;
         centos|rhel|fedora)
             yum install -y epel-release
-            yum install -y curl wget cronie openssl iptables iptables-services jq iproute2 coreutils
+            yum install -y curl wget openssl iptables iptables-services jq iproute2 coreutils
             ;;
         alpine)
             apk update
-            apk add curl wget cronie openssl iptables iptables-openrc jq iproute2 coreutils
+            apk add curl wget openssl iptables iptables-openrc jq iproute2 coreutils
             ;;
         *)
             echo -e "${RED}不支持的系统${PLAIN}" && exit 1
     esac
 }
 
-# ---------- Sing-box 安装 ----------
 install_singbox() {
     if [[ -f "$XSB_DIR/bin/sing-box" ]]; then
         echo -e "${YELLOW}Sing-box 已安装，版本: $(sing-box version | head -1)${PLAIN}"
@@ -139,7 +136,6 @@ uninstall_singbox() {
     echo -e "${GREEN}已卸载。配置文件保留，不需要可直接 rm -rf $XSB_DIR${PLAIN}"
 }
 
-# ---------- 证书管理 ----------
 list_certs() {
     echo -e "${GREEN}已安装的证书:${PLAIN}"
     if [[ -d "$XSB_DIR/cert" ]]; then
@@ -198,7 +194,6 @@ delete_cert() {
     fi
 }
 
-# ---------- 入站管理 ----------
 check_port_available() { ! ss -lntu | grep -q ":$1 "; }
 
 list_inbounds() {
@@ -281,7 +276,6 @@ add_inbound() {
             ;;
     esac
 
-    # 构建 JSON
     case $PROTO in
         vless-reality)
             jq -n --arg type "vless" --arg tag "$tag" --arg listen "::" --argjson port "$PORT" \
@@ -343,7 +337,7 @@ add_inbound() {
                 '{
                     type: $type, tag: $tag, listen: $listen, listen_port: $port,
                     users: [ { uuid: $uuid, alterId: 0 } ],
-                    transport: { type: "ws", path: $path, headers: { Host: $domain } },
+                    transport: { type: "ws", path: $path, headers: { Host: $domain }, early_data_header_name: "Sec-WebSocket-Protocol" },
                     tls: { enabled: true, server_name: $domain, certificate_path: $cert_path, key_path: $key_path }
                 }' > "$XSB_DIR/inbounds/inbound_${tag}.json"
             ;;
@@ -371,7 +365,6 @@ delete_inbound() {
     fi
 }
 
-# ---------- Brutal & 端口跳跃 ----------
 install_brutal() {
     if lsmod | grep -q brutal; then
         echo -e "${GREEN}Brutal 已加载${PLAIN}"
@@ -426,7 +419,6 @@ EOF
     iptables-save > "$v4_file" && ip6tables-save > "$v6_file" && echo -e "${GREEN}规则已持久化${PLAIN}"
 }
 
-# ---------- 出站管理 ----------
 list_outbounds() {
     echo -e "${GREEN}当前出站:${PLAIN}"
     for f in "$XSB_DIR"/outbounds/outbound_*.json "$XSB_DIR"/outbounds/endpoint_*.json; do
@@ -497,7 +489,6 @@ add_route_rule() {
     jq -n --arg outbound "$1" --argjson spec "$2" '$spec + { outbound: $outbound }' > "$XSB_DIR/conf/routes/route_${1}.json"
 }
 
-# ---------- Cloudflare 配置 ----------
 cf_api_request() {
     local method=$1 url=$2 data=$3
     CF_Key=$(get_or_ask "CF_Key" "Cloudflare API Key" "")
@@ -507,8 +498,11 @@ cf_api_request() {
         return 1
     fi
     headers=(-H "X-Auth-Email: $CF_Email" -H "X-Auth-Key: $CF_Key" -H "Content-Type: application/json")
-    [[ -n "$data" ]] && curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}" --data "$data" \
-        || curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}"
+    if [[ -n "$data" ]]; then
+        curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}" --data "$data"
+    else
+        curl -s --max-time 10 --retry 2 -X "$method" "$url" "${headers[@]}"
+    fi
 }
 
 cf_delete_record() {
@@ -564,59 +558,72 @@ EOF
 
 cf_argo() {
     echo -e "${YELLOW}配置 Argo 固定隧道${PLAIN}"
+
     if [[ ! -f "$XSB_DIR/bin/cloudflared" ]]; then
         echo -e "${GREEN}下载 cloudflared...${PLAIN}"
-        case $(uname -m) in x86_64) CF_ARCH="amd64" ;; aarch64) CF_ARCH="arm64" ;; *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;; esac
-        wget -O "$XSB_DIR/bin/cloudflared" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
+        case $(uname -m) in
+            x86_64)  CF_ARCH="amd64" ;;
+            aarch64) CF_ARCH="arm64" ;;
+            *) echo -e "${RED}不支持的架构${PLAIN}"; return 1 ;;
+        esac
+        wget -O "$XSB_DIR/bin/cloudflared" \
+            "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" \
+            || { echo -e "${RED}下载失败${PLAIN}"; return 1; }
         chmod +x "$XSB_DIR/bin/cloudflared"
     fi
-    DOMAIN=$(get_or_ask "DOMAIN" "主域名" "")
-    [[ -z "$DOMAIN" ]] && { echo -e "${RED}需要 DOMAIN${PLAIN}"; return 1; }
+
+    TUNNEL_NAME=$(get_or_ask "TUNNEL_NAME" "隧道标识" "main")
     ARGO_TOKEN=$(get_or_ask "ARGO_TOKEN" "请输入 Argo Tunnel Token" "")
     [[ -z "$ARGO_TOKEN" ]] && { echo -e "${RED}Token 不能为空${PLAIN}"; return 1; }
-    echo "$ARGO_TOKEN" > "$XSB_DIR/conf/argo_token" && chmod 600 "$XSB_DIR/conf/argo_token"
+
+    TOKEN_FILE="$XSB_DIR/conf/argo_token_${TUNNEL_NAME}"
+    echo "$ARGO_TOKEN" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+
+    SERVICE_NAME="argo-tunnel-${TUNNEL_NAME}"
+
     if [[ "$OS" == "alpine" ]]; then
-        if [[ ! -f /etc/init.d/argo-tunnel ]]; then
-            cat > /etc/init.d/argo-tunnel <<EOF
+        INIT_FILE="/etc/init.d/${SERVICE_NAME}"
+        cat > "$INIT_FILE" <<EOF
 #!/sbin/openrc-run
 command="$XSB_DIR/bin/cloudflared"
-command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file \"$XSB_DIR/conf/argo_token\""
+command_args="tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file \"$TOKEN_FILE\""
 command_user="root"
-pidfile="/run/argo-tunnel.pid"
-name="Cloudflare Argo Tunnel"
-description="Cloudflare Argo Tunnel ($DOMAIN)"
+pidfile="/run/${SERVICE_NAME}.pid"
+name="Argo Tunnel ${TUNNEL_NAME}"
+description="Cloudflare Argo Tunnel (${TUNNEL_NAME})"
 start_stop_daemon_args="--background --make-pidfile"
 depend() { need net; }
 EOF
-            chmod +x /etc/init.d/argo-tunnel
-            rc-update add argo-tunnel default 2>/dev/null
-        fi
-        rc-service argo-tunnel restart
+        chmod +x "$INIT_FILE"
+        rc-update add "$SERVICE_NAME" default 2>/dev/null
+        rc-service "$SERVICE_NAME" restart
     else
-        if [[ ! -f /etc/systemd/system/argo-tunnel.service ]]; then
-            cat > /etc/systemd/system/argo-tunnel.service <<EOF
+        SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+        cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Cloudflare Argo Tunnel ($DOMAIN)
+Description=Cloudflare Argo Tunnel (${TUNNEL_NAME})
 After=network.target
+
 [Service]
 Type=simple
-ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file "$XSB_DIR/conf/argo_token"
+ExecStart=$XSB_DIR/bin/cloudflared tunnel --no-autoupdate --edge-ip-version auto --protocol http2 run --token-file "$TOKEN_FILE"
 Restart=on-failure
 RestartSec=10s
 User=root
+
 [Install]
 WantedBy=multi-user.target
 EOF
-            systemctl daemon-reload
-            systemctl enable argo-tunnel 2>/dev/null
-        fi
-        systemctl restart argo-tunnel
+        systemctl daemon-reload
+        systemctl enable "$SERVICE_NAME" 2>/dev/null
+        systemctl restart "$SERVICE_NAME"
     fi
-    echo -e "${GREEN}已创建 Argo 隧道服务${PLAIN}"
-    echo -e "查看状态: $([[ "$OS" == "alpine" ]] && echo "rc-service argo-tunnel status" || echo "systemctl status argo-tunnel")"
+
+    echo -e "${GREEN}Argo 隧道 [${TUNNEL_NAME}] 已创建/重启${PLAIN}"
+    echo -e "查看状态: $([[ "$OS" == "alpine" ]] && echo "rc-service ${SERVICE_NAME} status" || echo "systemctl status ${SERVICE_NAME}")"
 }
 
-# ---------- TCP 调优 ----------
 tcp_tune() {
     echo -e "${YELLOW}TCP 智能调优${PLAIN}"
     if [[ ! -f "$XSB_DIR/bin/speedtest" ]]; then
@@ -685,7 +692,6 @@ EOF
     echo -e "${GREEN}TCP 调优完成 (缓冲区 ${BUFFER_MB}MB)${PLAIN}"
 }
 
-# ---------- 构建配置并启动 ----------
 build_and_start() {
     echo -e "${GREEN}构建完整配置...${PLAIN}"
     inbounds_files=("$XSB_DIR"/inbounds/inbound_*.json)
@@ -725,8 +731,7 @@ build_and_start() {
         return 1
     fi
     if [[ "$OS" == "alpine" ]]; then
-        if [[ ! -f /etc/init.d/sing-box ]]; then
-            cat > /etc/init.d/sing-box <<EOF
+        cat > /etc/init.d/sing-box <<EOF
 #!/sbin/openrc-run
 command="$XSB_DIR/bin/sing-box"
 command_args="run -c $XSB_DIR/conf/config.json"
@@ -737,34 +742,33 @@ description="Sing-box Service"
 start_stop_daemon_args="--background --make-pidfile"
 depend() { need net; }
 EOF
-            chmod +x /etc/init.d/sing-box
-            rc-update add sing-box default 2>/dev/null
-        fi
+        chmod +x /etc/init.d/sing-box
+        rc-update add sing-box default 2>/dev/null
         rc-service sing-box restart
     else
-        if [[ ! -f /etc/systemd/system/sing-box.service ]]; then
-            cat > /etc/systemd/system/sing-box.service <<EOF
+        cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
 Description=Sing-box Service
 After=network.target
+
 [Service]
 Type=simple
 ExecStart=$XSB_DIR/bin/sing-box run -c $XSB_DIR/conf/config.json
 Restart=on-failure
 RestartSec=5s
+User=root
+
 [Install]
 WantedBy=multi-user.target
 EOF
-            systemctl daemon-reload
-            systemctl enable sing-box 2>/dev/null
-        fi
+        systemctl daemon-reload
+        systemctl enable sing-box 2>/dev/null
         systemctl restart sing-box
     fi
-    echo -e "${GREEN}已创建 sing-box 服务${PLAIN}"
+    echo -e "${GREEN}已创建/更新 sing-box 服务${PLAIN}"
     echo -e "查看状态: $([[ "$OS" == "alpine" ]] && echo "rc-service sing-box status" || echo "systemctl status sing-box")"
 }
 
-# ---------- 显示节点信息 ----------
 show_info() {
     ipv4=$(curl -s4 --max-time 3 ifconfig.me 2>/dev/null)
     ipv6=$(curl -s6 --max-time 3 ifconfig.me 2>/dev/null)
@@ -835,7 +839,6 @@ show_info() {
     echo "=================================================="
 }
 
-# ---------- 交互菜单 ----------
 interactive_menu() {
     while true; do
         echo -e "\n${YELLOW}========== 主菜单 ==========${PLAIN}"
