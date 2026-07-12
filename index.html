@@ -1,648 +1,786 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sing-box 部署命令生成器 (xsb)</title>
-<style>
-:root {
-    --bg: #090d1a;
-    --card: #121829;
-    --ink: #f1f5f9;
-    --sub: #94a3b8;
-    --line: #1e293b;
-    --acc: #4f46e5;
-    --acc-hover: #6366f1;
-    --ok: #10b981;
-    --warn: #f59e0b;
-    --err: #ef4444;
-    --input-bg: #0b0f19;
-    --button-bg-dark: #1e293b;
-    --button-bg-light: #334155;
-    --body-bg: radial-gradient(circle at top, #1e1b4b 0%, var(--bg) 50%);
-    --radius: 12px;
-    --radius-sm: 8px;
-    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.light-mode {
-    --bg: #f8fafc;
-    --card: #ffffff;
-    --ink: #0f172a;
-    --sub: #64748b;
-    --line: #e2e8f0;
-    --acc: #4f46e5;
-    --acc-hover: #4338ca;
-    --ok: #10b981;
-    --warn: #f59e0b;
-    --err: #ef4444;
-    --input-bg: #f1f5f9;
-    --button-bg-dark: #e2e8f0;
-    --button-bg-light: #cbd5e1;
-    --body-bg: var(--bg);
-    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    margin: 0;
-    background: var(--body-bg);
-    color: var(--ink);
-    font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    min-height: 100vh;
-    padding: 40px 20px;
-    transition: background 0.3s;
-}
-a { color: var(--acc); text-decoration: none; transition: var(--transition); }
-a:hover { color: var(--acc-hover); text-decoration: underline; }
-.wrap { max-width: 1300px; margin: 0 auto; }
-
-header {
-    text-align: center;
-    margin-bottom: 32px;
-    position: relative;
-    padding-bottom: 10px;
-}
-header h1 {
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    background: linear-gradient(135deg, #818cf8, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin: 0;
-}
-.light-mode header h1 {
-    background: linear-gradient(135deg, #4f46e5, #9333ea);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-header .repo-link {
-    font-size: 14px;
-    color: var(--sub);
-    margin-top: 6px;
-    font-weight: 500;
-}
-header .sub-desc {
-    margin-top: 10px;
-    font-size: 15px;
-    color: var(--sub);
-}
-#themeToggle {
-    position: absolute;
-    right: 0;
-    top: 6px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 8px 16px;
-    color: var(--ink);
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: var(--shadow);
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-#themeToggle:hover { background: var(--button-bg-dark); border-color: var(--sub); }
-
-.main-content {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-@media (min-width: 1024px) {
-    .main-content {
-        display: grid;
-        grid-template-columns: 1fr 500px;
-        gap: 24px;
-        align-items: start;
-    }
-    .output-side {
-        position: sticky;
-        top: 24px;
-    }
-}
-
-.card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 24px 28px;
-    margin-bottom: 24px;
-    box-shadow: var(--shadow);
-    transition: border-color 0.3s;
-}
-.card h2 {
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 18px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--ink);
-}
-
-.entry-list { margin-top: 14px; }
-.entry-item {
-    background: var(--input-bg);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 16px 20px;
-    margin-bottom: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 14px 20px;
-    animation: fadeIn 0.2s ease-out;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.entry-item .row {
-    flex: 1 1 200px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-}
-.entry-item .row label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--sub);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.entry-item .row input,
-.entry-item .row select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--card);
-    color: var(--ink);
-    font-size: 14px;
-    transition: var(--transition);
-}
-.entry-item .row input:focus,
-.entry-item .row select:focus {
-    border-color: var(--acc);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-    outline: none;
-}
-.entry-item .del-btn {
-    background: rgba(239, 68, 68, 0.1);
-    border: none;
-    color: var(--err);
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    cursor: pointer;
-    transition: var(--transition);
-    align-self: flex-end;
-    margin-bottom: 4px;
-}
-.entry-item .del-btn:hover { background: var(--err); color: #fff; transform: scale(1.05); }
-
-.add-btn {
-    background: transparent;
-    border: 2px dashed var(--line);
-    color: var(--sub);
-    padding: 10px 24px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: var(--transition);
-    margin-top: 6px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.add-btn:hover {
-    background: rgba(79, 70, 229, 0.05);
-    border-color: var(--acc);
-    color: var(--acc);
-}
-
-.global-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px 32px;
-    align-items: center;
-}
-.global-row .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 1 1 200px;
-}
-.global-row .field label {
-    color: var(--sub);
-    font-size: 13px;
-    font-weight: 600;
-}
-.global-row .field input {
-    padding: 10px 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: var(--input-bg);
-    color: var(--ink);
-    font-size: 14px;
-    width: 100%;
-    transition: var(--transition);
-}
-.global-row .field input:focus {
-    border-color: var(--acc);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-    outline: none;
-}
-
-.output-area textarea {
-    width: 100%;
-    min-height: 180px;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: #05070f;
-    color: #38bdf8;
-    font-family: 'Fira Code', 'SF Mono', Consolas, Monaco, monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    resize: vertical;
-    tab-size: 2;
-    box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
-}
-.light-mode .output-area textarea {
-    background: #f8fafc;
-    color: #0f172a;
-    border-color: var(--line);
-    box-shadow: inset 0 1px 4px rgba(0,0,0,0.05);
-}
-.output-area textarea:focus {
-    outline: none;
-    border-color: var(--acc);
-}
-
-.single-cmd-list {
-    margin-top: 8px;
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 280px;
-    overflow-y: auto;
-    padding-right: 6px;
-}
-.single-cmd-list::-webkit-scrollbar { width: 5px; height: 5px; }
-.single-cmd-list::-webkit-scrollbar-track { background: transparent; }
-.single-cmd-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
-.single-cmd-list::-webkit-scrollbar-thumb:hover { background: var(--sub); }
-
-.single-cmd-item {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    transition: var(--transition);
-}
-.light-mode .single-cmd-item { background: rgba(0, 0, 0, 0.01); }
-.single-cmd-item:hover { border-color: var(--sub); background: rgba(255, 255, 255, 0.04); }
-.light-mode .single-cmd-item:hover { background: rgba(0, 0, 0, 0.03); }
-
-.single-cmd-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.single-cmd-title {
-    font-size: 12.5px;
-    color: var(--sub);
-    font-family: 'Fira Code', monospace;
-    font-weight: 600;
-}
-.single-cmd-actions .single-copy-btn {
-    background: transparent;
-    border: none;
-    color: var(--acc);
-    cursor: pointer;
-    font-size: 12.5px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 4px;
-    transition: var(--transition);
-}
-.single-cmd-actions .single-copy-btn:hover { background: rgba(79, 70, 229, 0.1); color: var(--acc-hover); }
-
-.single-cmd-body {
-    font-family: 'Fira Code', 'SF Mono', monospace;
-    font-size: 12.5px;
-    color: #0ea5e9;
-    white-space: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-}
-.light-mode .single-cmd-body { color: #1e293b; }
-.single-cmd-body::-webkit-scrollbar { height: 4px; }
-.single-cmd-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
-
-.output-area .actions {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-}
-.output-area .actions button {
-    padding: 10px 20px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    background: var(--button-bg-dark);
-    color: var(--ink);
-    transition: var(--transition);
-}
-.output-area .actions button:hover { background: var(--button-bg-light); border-color: var(--sub); }
-.output-area .actions button.primary {
-    background: var(--acc);
-    color: #fff;
-    border: none;
-}
-.output-area .actions button.primary:hover { background: var(--acc-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
-.output-area .actions button:active { transform: scale(0.98); }
-.output-area .copy-feedback {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--ok);
-    margin-left: 4px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-.output-area .copy-feedback.show { opacity: 1; }
-
-footer {
-    text-align: center;
-    color: var(--sub);
-    font-size: 14px;
-    padding: 30px 0 10px;
-    border-top: 1px solid var(--line);
-    margin-top: 40px;
-}
-footer a { color: var(--sub); font-weight: 500; }
-footer a:hover { color: var(--acc); }
-
-.socks-row-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px 20px;
-    flex: 1 1 100%;
-}
-.socks-row-group .row {
-    flex: 1 1 200px;
-}
-
-.extra-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px 20px;
-    margin: 14px 0 14px 0;
-    padding: 12px 14px;
-    background: rgba(79, 70, 229, 0.03);
-    border-radius: var(--radius-sm);
-    border: 1px dashed var(--line);
-}
-.extra-options label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13.5px;
-    color: var(--ink);
-    font-weight: 500;
-    cursor: pointer;
-}
-.extra-options input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--acc);
-    cursor: pointer;
-}
-.output-type-group {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.output-type-group label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    cursor: pointer;
-}
-.output-type-group input[type="radio"] {
-    accent-color: var(--acc);
-}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-<header>
-    <h1>🚀 Sing-box 部署命令生成器 (xsb)</h1>
-    <div class="repo-link">
-        <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
-    </div>
-    <div class="sub-desc">添加证书、入站、出站、Cloudflare 配置 → 生成命令列表 → 复制执行</div>
-    <button id="themeToggle">🌙 暗色</button>
-</header>
-
-<div class="main-content">
-    <div class="config-side">
-        <div class="card">
-            <h2>🔑 全局 Cloudflare 凭证</h2>
-            <div class="global-row">
-                <div class="field">
-                    <label>CF_Key</label>
-                    <input id="globalCfKey" type="text" placeholder="Cloudflare API Key" />
-                </div>
-                <div class="field">
-                    <label>CF_Email</label>
-                    <input id="globalCfEmail" type="text" placeholder="Cloudflare Email" />
-                </div>
-            </div>
-            <div style="font-size:13px;color:var(--sub);margin-top:10px;">用于 DNS‑01 证书验证、DNS 记录、Origin Rule 和 Argo 隧道。</div>
-        </div>
-
-        <div class="card" id="certModule">
-            <h2>🔐 证书</h2>
-            <div id="certList" class="entry-list"></div>
-            <button class="add-btn" data-type="cert">➕ 添加证书</button>
-        </div>
-
-        <div class="card" id="inboundModule">
-            <h2>📥 入站</h2>
-            <div id="inboundList" class="entry-list"></div>
-            <button class="add-btn" data-type="inbound">➕ 添加入站</button>
-        </div>
-
-        <div class="card" id="outboundModule">
-            <h2>📤 出站</h2>
-            <div id="outboundList" class="entry-list"></div>
-            <button class="add-btn" data-type="outbound">➕ 添加出站</button>
-        </div>
-
-        <div class="card" id="cfDnsModule">
-            <h2>☁️ DNS 记录</h2>
-            <div id="cfDnsList" class="entry-list"></div>
-            <button class="add-btn" data-type="cf_dns">➕ 添加 DNS 记录</button>
-        </div>
-
-        <div class="card" id="cfOriginRuleModule">
-            <h2>☁️ Origin Rule</h2>
-            <div id="cfOriginRuleList" class="entry-list"></div>
-            <button class="add-btn" data-type="cf_origin_rule">➕ 添加 Origin Rule</button>
-        </div>
-
-        <div class="card" id="cfArgoModule">
-            <h2>☁️ Argo 隧道</h2>
-            <div id="cfArgoList" class="entry-list"></div>
-            <button class="add-btn" data-type="cf_argo">➕ 添加 Argo 隧道</button>
-        </div>
-    </div>
-
-    <div class="output-side">
-        <div class="card output-area" style="margin-bottom:0;">
-            <h2>📋 生成的命令列表</h2>
-            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px;">
-                <div class="output-type-group">
-                    <span style="color:var(--sub);font-size:14px;font-weight:600;">命令类型：</span>
-                    <label><input type="radio" name="cmdTypeOut" value="curl" checked /> curl</label>
-                    <label><input type="radio" name="cmdTypeOut" value="wget" /> wget</label>
-                </div>
-            </div>
-            <div class="extra-options">
-                <label><input type="checkbox" id="includeTune" /> 包含 TCP 调优 (tune)</label>
-                <label><input type="checkbox" id="includeInstall" checked /> 包含 install (首次部署必需)</label>
-            </div>
-            
-            <textarea id="outputCmd" spellcheck="false" readonly></textarea>
-            
-            <div id="singleCmdTitle" style="margin-top: 16px; font-size: 13.5px; font-weight: 600; color: var(--sub);">📌 单行独立复制：</div>
-            <div id="singleCmdList" class="single-cmd-list"></div>
-
-            <div class="actions">
-                <button id="btnCopy" class="primary">📋 复制全部命令</button>
-                <button id="btnReset">↺ 清空所有</button>
-                <span id="copyFeedback" class="copy-feedback">✅ 已复制到剪贴板</span>
-            </div>
-            <div style="font-size:13px;color:var(--sub);margin-top:14px;line-height:1.6;background:rgba(245,158,11,0.05);padding:12px 16px;border-left:4px solid var(--warn);border-radius:4px;">
-                💡 可单独调整入站和出站，会自动构建并重启服务。<br>
-                ⚠️ 首次部署必须包含 <strong>install</strong>。
-            </div>
-        </div>
-    </div>
-</div>
-
-<footer>
-    <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
-    &nbsp;·&nbsp; 如果对您有帮助，请点个 Star ⭐ 欢迎反馈 Issues
-</footer>
-
-</div>
-
-<script>
-(function() {
-    'use strict';
-
-    const SCRIPT_URL = 'https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh';
-
-    let entries = {
-        cert: [],
-        inbound: [],
-        outbound: [],
-        cf_dns: [],
-        cf_origin_rule: [],
-        cf_argo: []
-    };
-
-    const globalCfKey = document.getElementById('globalCfKey');
-    const globalCfEmail = document.getElementById('globalCfEmail');
-    const outputCmd = document.getElementById('outputCmd');
-    const singleCmdList = document.getElementById('singleCmdList');
-    const btnCopy = document.getElementById('btnCopy');
-    const btnReset = document.getElementById('btnReset');
-    const copyFeedback = document.getElementById('copyFeedback');
-    const themeToggle = document.getElementById('themeToggle');
-    const cmdTypeRadios = document.querySelectorAll('input[name="cmdTypeOut"]');
-    const includeTune = document.getElementById('includeTune');
-    const includeInstall = document.getElementById('includeInstall');
-
-    const moduleMap = {
-        cert: { container: 'certList', fn: renderCertEntry },
-        inbound: { container: 'inboundList', fn: renderInboundEntry },
-        outbound: { container: 'outboundList', fn: renderOutboundEntry },
-        cf_dns: { container: 'cfDnsList', fn: renderCfDnsEntry },
-        cf_origin_rule: { container: 'cfOriginRuleList', fn: renderCfOriginRuleEntry },
-        cf_argo: { container: 'cfArgoList', fn: renderCfArgoEntry }
-    };
-
-    function applyTheme(isLight) {
-        document.body.classList.toggle('light-mode', isLight);
-        themeToggle.textContent = isLight ? '☀️ 亮色' : '🌙 暗色';
-        localStorage.setItem('xsb_theme', isLight ? 'light' : 'dark');
-    }
-
-    function initTheme() {
-        const isLight = localStorage.getItem('xsb_theme') === 'light';
-        applyTheme(isLight);
-    }
-
-    themeToggle.addEventListener('click', function() {
-        const isLight = !document.body.classList.contains('light-mode');
-        applyTheme(isLight);
-    });
-
-    function escHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-
-    function renderAll() {
-        Object.keys(moduleMap).forEach(type => {
-            renderModuleList(type);
-        });
-    }
-
-    function renderModuleList(type) {
-        const map = moduleMap[type];
-        if (map) {
-            renderList(type, map.container, map.fn);
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sing-box 部署命令生成器 (xsb)</title>
+    <style>
+        :root {
+            --bg: #090d1a;
+            --card: #121829;
+            --ink: #f1f5f9;
+            --sub: #94a3b8;
+            --line: #1e293b;
+            --acc: #4f46e5;
+            --acc-hover: #6366f1;
+            --ok: #10b981;
+            --warn: #f59e0b;
+            --err: #ef4444;
+            --input-bg: #0b0f19;
+            --button-bg-dark: #1e293b;
+            --button-bg-light: #334155;
+            --body-bg: radial-gradient(circle at top, #1e1b4b 0%, var(--bg) 50%);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        bindDynamicSelects();
-    }
 
-    function renderList(type, containerId, renderFn) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        const items = entries[type] || [];
-        container.innerHTML = items.map((item, index) => renderFn(item, index, type)).join('');
-    }
+        .light-mode {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --ink: #0f172a;
+            --sub: #64748b;
+            --line: #e2e8f0;
+            --acc: #4f46e5;
+            --acc-hover: #4338ca;
+            --ok: #10b981;
+            --warn: #f59e0b;
+            --err: #ef4444;
+            --input-bg: #f1f5f9;
+            --button-bg-dark: #e2e8f0;
+            --button-bg-light: #cbd5e1;
+            --body-bg: var(--bg);
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        }
 
-    function renderCertEntry(item, idx, type) {
-        const showWebPort = (item.acme_mode == 1);
-        return `
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            background: var(--body-bg);
+            color: var(--ink);
+            font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            padding: 40px 20px;
+            transition: background 0.3s;
+        }
+
+        a {
+            color: var(--acc);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        a:hover {
+            color: var(--acc-hover);
+            text-decoration: underline;
+        }
+
+        .wrap {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 32px;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        .light-mode header h1 {
+            background: linear-gradient(135deg, #4f46e5, #9333ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        header .repo-link {
+            font-size: 14px;
+            color: var(--sub);
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
+        header .sub-desc {
+            margin-top: 10px;
+            font-size: 15px;
+            color: var(--sub);
+        }
+
+        #themeToggle {
+            position: absolute;
+            right: 0;
+            top: 6px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 8px 16px;
+            color: var(--ink);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #themeToggle:hover {
+            background: var(--button-bg-dark);
+            border-color: var(--sub);
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .main-content {
+                display: grid;
+                grid-template-columns: 1fr 500px;
+                gap: 24px;
+                align-items: start;
+            }
+
+            .output-side {
+                position: sticky;
+                top: 24px;
+            }
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 24px 28px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            transition: border-color 0.3s;
+        }
+
+        .card h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--ink);
+        }
+
+        .entry-list {
+            margin-top: 14px;
+        }
+
+        .entry-item {
+            background: var(--input-bg);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px 20px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .entry-item .row {
+            flex: 1 1 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .entry-item .row label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .entry-item .row input,
+        .entry-item .row select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--card);
+            color: var(--ink);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .entry-item .row input:focus,
+        .entry-item .row select:focus {
+            border-color: var(--acc);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+            outline: none;
+        }
+
+        .entry-item .del-btn {
+            background: rgba(239, 68, 68, 0.1);
+            border: none;
+            color: var(--err);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            align-self: flex-end;
+            margin-bottom: 4px;
+        }
+
+        .entry-item .del-btn:hover {
+            background: var(--err);
+            color: #fff;
+            transform: scale(1.05);
+        }
+
+        .add-btn {
+            background: transparent;
+            border: 2px dashed var(--line);
+            color: var(--sub);
+            padding: 10px 24px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: var(--transition);
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .add-btn:hover {
+            background: rgba(79, 70, 229, 0.05);
+            border-color: var(--acc);
+            color: var(--acc);
+        }
+
+        .global-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px 32px;
+            align-items: center;
+        }
+
+        .global-row .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1 1 200px;
+        }
+
+        .global-row .field label {
+            color: var(--sub);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .global-row .field input {
+            padding: 10px 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            background: var(--input-bg);
+            color: var(--ink);
+            font-size: 14px;
+            width: 100%;
+            transition: var(--transition);
+        }
+
+        .global-row .field input:focus {
+            border-color: var(--acc);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+            outline: none;
+        }
+
+        .output-area textarea {
+            width: 100%;
+            min-height: 180px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            background: #05070f;
+            color: #38bdf8;
+            font-family: 'Fira Code', 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+            tab-size: 2;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .light-mode .output-area textarea {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: var(--line);
+            box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .output-area textarea:focus {
+            outline: none;
+            border-color: var(--acc);
+        }
+
+        .single-cmd-list {
+            margin-top: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .single-cmd-list::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        .single-cmd-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .single-cmd-list::-webkit-scrollbar-thumb {
+            background: var(--line);
+            border-radius: 10px;
+        }
+
+        .single-cmd-list::-webkit-scrollbar-thumb:hover {
+            background: var(--sub);
+        }
+
+        .single-cmd-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: var(--transition);
+        }
+
+        .light-mode .single-cmd-item {
+            background: rgba(0, 0, 0, 0.01);
+        }
+
+        .single-cmd-item:hover {
+            border-color: var(--sub);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .light-mode .single-cmd-item:hover {
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .single-cmd-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .single-cmd-title {
+            font-size: 12.5px;
+            color: var(--sub);
+            font-family: 'Fira Code', monospace;
+            font-weight: 600;
+        }
+
+        .single-cmd-actions .single-copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--acc);
+            cursor: pointer;
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .single-cmd-actions .single-copy-btn:hover {
+            background: rgba(79, 70, 229, 0.1);
+            color: var(--acc-hover);
+        }
+
+        .single-cmd-body {
+            font-family: 'Fira Code', 'SF Mono', monospace;
+            font-size: 12.5px;
+            color: #0ea5e9;
+            white-space: nowrap;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .light-mode .single-cmd-body {
+            color: #1e293b;
+        }
+
+        .single-cmd-body::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .single-cmd-body::-webkit-scrollbar-thumb {
+            background: var(--line);
+            border-radius: 4px;
+        }
+
+        .output-area .actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .output-area .actions button {
+            padding: 10px 20px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--button-bg-dark);
+            color: var(--ink);
+            transition: var(--transition);
+        }
+
+        .output-area .actions button:hover {
+            background: var(--button-bg-light);
+            border-color: var(--sub);
+        }
+
+        .output-area .actions button.primary {
+            background: var(--acc);
+            color: #fff;
+            border: none;
+        }
+
+        .output-area .actions button.primary:hover {
+            background: var(--acc-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+
+        .output-area .actions button:active {
+            transform: scale(0.98);
+        }
+
+        .output-area .copy-feedback {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ok);
+            margin-left: 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .output-area .copy-feedback.show {
+            opacity: 1;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--sub);
+            font-size: 14px;
+            padding: 30px 0 10px;
+            border-top: 1px solid var(--line);
+            margin-top: 40px;
+        }
+
+        footer a {
+            color: var(--sub);
+            font-weight: 500;
+        }
+
+        footer a:hover {
+            color: var(--acc);
+        }
+
+        .socks-row-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 20px;
+            flex: 1 1 100%;
+        }
+
+        .socks-row-group .row {
+            flex: 1 1 200px;
+        }
+
+        .extra-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px 20px;
+            margin: 14px 0 14px 0;
+            padding: 12px 14px;
+            background: rgba(79, 70, 229, 0.03);
+            border-radius: var(--radius-sm);
+            border: 1px dashed var(--line);
+        }
+
+        .extra-options label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13.5px;
+            color: var(--ink);
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .extra-options input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--acc);
+            cursor: pointer;
+        }
+
+        .output-type-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .output-type-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .output-type-group input[type="radio"] {
+            accent-color: var(--acc);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+
+        <header>
+            <h1>🚀 Sing-box 部署命令生成器 (xsb)</h1>
+            <div class="repo-link">
+                <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
+            </div>
+            <div class="sub-desc">添加证书、入站、出站、Cloudflare 配置 → 生成命令列表 → 复制执行</div>
+            <button id="themeToggle">🌙 暗色</button>
+        </header>
+
+        <div class="main-content">
+            <div class="config-side">
+                <div class="card">
+                    <h2>🔑 全局 Cloudflare 凭证</h2>
+                    <div class="global-row">
+                        <div class="field">
+                            <label>CF_Key</label>
+                            <input id="globalCfKey" type="text" placeholder="Cloudflare API Key" />
+                        </div>
+                        <div class="field">
+                            <label>CF_Email</label>
+                            <input id="globalCfEmail" type="text" placeholder="Cloudflare Email" />
+                        </div>
+                    </div>
+                    <div style="font-size:13px;color:var(--sub);margin-top:10px;">用于 DNS‑01 证书验证、DNS 记录、Origin Rule 和
+                        Argo 隧道。</div>
+                </div>
+
+                <div class="card" id="certModule">
+                    <h2>🔐 证书</h2>
+                    <div id="certList" class="entry-list"></div>
+                    <button class="add-btn" data-type="cert">➕ 添加证书</button>
+                </div>
+
+                <div class="card" id="inboundModule">
+                    <h2>📥 入站</h2>
+                    <div id="inboundList" class="entry-list"></div>
+                    <button class="add-btn" data-type="inbound">➕ 添加入站</button>
+                </div>
+
+                <div class="card" id="outboundModule">
+                    <h2>📤 出站</h2>
+                    <div id="outboundList" class="entry-list"></div>
+                    <button class="add-btn" data-type="outbound">➕ 添加出站</button>
+                </div>
+
+                <div class="card" id="cfDnsModule">
+                    <h2>☁️ DNS 记录</h2>
+                    <div id="cfDnsList" class="entry-list"></div>
+                    <button class="add-btn" data-type="cf_dns">➕ 添加 DNS 记录</button>
+                </div>
+
+                <div class="card" id="cfOriginRuleModule">
+                    <h2>☁️ Origin Rule</h2>
+                    <div id="cfOriginRuleList" class="entry-list"></div>
+                    <button class="add-btn" data-type="cf_origin_rule">➕ 添加 Origin Rule</button>
+                </div>
+
+                <div class="card" id="cfArgoModule">
+                    <h2>☁️ Argo 隧道</h2>
+                    <div id="cfArgoList" class="entry-list"></div>
+                    <button class="add-btn" data-type="cf_argo">➕ 添加 Argo 隧道</button>
+                </div>
+            </div>
+
+            <div class="output-side">
+                <div class="card output-area" style="margin-bottom:0;">
+                    <h2>📋 生成的命令列表</h2>
+                    <div
+                        style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px;">
+                        <div class="output-type-group">
+                            <span style="color:var(--sub);font-size:14px;font-weight:600;">命令类型：</span>
+                            <label><input type="radio" name="cmdTypeOut" value="curl" checked /> curl</label>
+                            <label><input type="radio" name="cmdTypeOut" value="wget" /> wget</label>
+                        </div>
+                    </div>
+                    <div class="extra-options">
+                        <label><input type="checkbox" id="includeTune" /> 包含 TCP 调优 (tune)</label>
+                        <label><input type="checkbox" id="includeInstall" checked /> 包含 install (首次部署必需)</label>
+                    </div>
+
+                    <textarea id="outputCmd" spellcheck="false" readonly></textarea>
+
+                    <div id="singleCmdTitle"
+                        style="margin-top: 16px; font-size: 13.5px; font-weight: 600; color: var(--sub);">📌 单行独立复制：
+                    </div>
+                    <div id="singleCmdList" class="single-cmd-list"></div>
+
+                    <div class="actions">
+                        <button id="btnCopy" class="primary">📋 复制全部命令</button>
+                        <button id="btnReset">↺ 清空所有</button>
+                        <span id="copyFeedback" class="copy-feedback">✅ 已复制到剪贴板</span>
+                    </div>
+                    <div
+                        style="font-size:13px;color:var(--sub);margin-top:14px;line-height:1.6;background:rgba(245,158,11,0.05);padding:12px 16px;border-left:4px solid var(--warn);border-radius:4px;">
+                        💡 可单独调整入站和出站，会自动构建并重启服务。<br>
+                        ⚠️ 首次部署必须包含 <strong>install</strong>。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <a href="https://github.com/hellooe/singbox-x" target="_blank">GitHub: hellooe/singbox-x</a>
+            &nbsp;·&nbsp; 如果对您有帮助，请点个 Star ⭐ 欢迎反馈 Issues
+        </footer>
+
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const SCRIPT_URL = 'https://raw.githubusercontent.com/hellooe/singbox-x/refs/heads/master/xsb.sh';
+
+            let entries = {
+                cert: [],
+                inbound: [],
+                outbound: [],
+                cf_dns: [],
+                cf_origin_rule: [],
+                cf_argo: []
+            };
+
+            const globalCfKey = document.getElementById('globalCfKey');
+            const globalCfEmail = document.getElementById('globalCfEmail');
+            const outputCmd = document.getElementById('outputCmd');
+            const singleCmdList = document.getElementById('singleCmdList');
+            const btnCopy = document.getElementById('btnCopy');
+            const btnReset = document.getElementById('btnReset');
+            const copyFeedback = document.getElementById('copyFeedback');
+            const themeToggle = document.getElementById('themeToggle');
+            const cmdTypeRadios = document.querySelectorAll('input[name="cmdTypeOut"]');
+            const includeTune = document.getElementById('includeTune');
+            const includeInstall = document.getElementById('includeInstall');
+
+            const moduleMap = {
+                cert: { container: 'certList', fn: renderCertEntry },
+                inbound: { container: 'inboundList', fn: renderInboundEntry },
+                outbound: { container: 'outboundList', fn: renderOutboundEntry },
+                cf_dns: { container: 'cfDnsList', fn: renderCfDnsEntry },
+                cf_origin_rule: { container: 'cfOriginRuleList', fn: renderCfOriginRuleEntry },
+                cf_argo: { container: 'cfArgoList', fn: renderCfArgoEntry }
+            };
+
+            function applyTheme(isLight) {
+                document.body.classList.toggle('light-mode', isLight);
+                themeToggle.textContent = isLight ? '☀️ 亮色' : '🌙 暗色';
+                localStorage.setItem('xsb_theme', isLight ? 'light' : 'dark');
+            }
+
+            function initTheme() {
+                const isLight = localStorage.getItem('xsb_theme') === 'light';
+                applyTheme(isLight);
+            }
+
+            themeToggle.addEventListener('click', function () {
+                const isLight = !document.body.classList.contains('light-mode');
+                applyTheme(isLight);
+            });
+
+            function escHtml(str) {
+                if (!str) return '';
+                return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+
+            function renderAll() {
+                Object.keys(moduleMap).forEach(type => {
+                    renderModuleList(type);
+                });
+            }
+
+            function renderModuleList(type) {
+                const map = moduleMap[type];
+                if (map) {
+                    renderList(type, map.container, map.fn);
+                }
+                bindDynamicSelects();
+            }
+
+            function renderList(type, containerId, renderFn) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const items = entries[type] || [];
+                container.innerHTML = items.map((item, index) => renderFn(item, index, type)).join('');
+            }
+
+            function renderCertEntry(item, idx, type) {
+                const showWebPort = (item.acme_mode == 1);
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
                 <div class="row"><label>验证方式</label>
@@ -655,19 +793,19 @@ footer a:hover { color: var(--acc); }
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
+            }
 
-    function renderInboundEntry(item, idx, type) {
-        const protocol = parseInt(item.inbound_type, 10);
-        let credLabel = 'UUID';
-        if ([2,3,4,6].includes(protocol)) credLabel = 'PASSWORD';
-        const showReality = (protocol === 1 || protocol === 2);
-        const showTlsCert = (protocol === 3 || protocol === 4 || protocol === 5);
-        const showWs = (protocol === 5);
-        const showSs = (protocol === 6);
-        const showHy2 = (protocol === 4);
-        const showHop = (showHy2 && item.enable_hop === 'y');
-        return `
+            function renderInboundEntry(item, idx, type) {
+                const protocol = parseInt(item.inbound_type, 10);
+                let credLabel = 'UUID';
+                if ([2, 3, 4, 6].includes(protocol)) credLabel = 'PASSWORD';
+                const showReality = (protocol === 1 || protocol === 2);
+                const showTlsCert = (protocol === 3 || protocol === 4 || protocol === 5);
+                const showWs = (protocol === 5);
+                const showSs = (protocol === 6);
+                const showHy2 = (protocol === 4);
+                const showHop = (showHy2 && item.enable_hop === 'y');
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>协议</label>
                     <select data-field="inbound_type" class="dynamic-select">
@@ -703,11 +841,11 @@ footer a:hover { color: var(--acc); }
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
+            }
 
-    function renderOutboundEntry(item, idx, type) {
-        const isSocks = (item.outbound_type == 1);
-        return `
+            function renderOutboundEntry(item, idx, type) {
+                const isSocks = (item.outbound_type == 1);
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>类型</label>
                     <select data-field="outbound_type" class="dynamic-select">
@@ -729,20 +867,20 @@ footer a:hover { color: var(--acc); }
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
+            }
 
-    function renderCfDnsEntry(item, idx, type) {
-        return `
+            function renderCfDnsEntry(item, idx, type) {
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
                 <div class="row"><label>Zone ID</label><input type="text" value="${escHtml(item.zone_id)}" placeholder="Zone ID" data-field="zone_id" /></div>
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
+            }
 
-    function renderCfOriginRuleEntry(item, idx, type) {
-        return `
+            function renderCfOriginRuleEntry(item, idx, type) {
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
                 <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
                 <div class="row"><label>Zone ID</label><input type="text" value="${escHtml(item.zone_id)}" placeholder="Zone ID" data-field="zone_id" /></div>
@@ -751,324 +889,323 @@ footer a:hover { color: var(--acc); }
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
+            }
 
-    function renderCfArgoEntry(item, idx, type) {
-        return `
+            function renderCfArgoEntry(item, idx, type) {
+                return `
             <div class="entry-item" data-type="${type}" data-idx="${idx}">
-                <div class="row"><label>域名</label><input type="text" value="${escHtml(item.domain)}" placeholder="example.com" data-field="domain" /></div>
+                <div class="row"><label>隧道标识</label><input type="text" value="${escHtml(item.tunnel_name)}" placeholder="main" data-field="tunnel_name" /></div>
                 <div class="row" style="flex:2 1 300px;"><label>Argo Token</label><input type="text" value="${escHtml(item.argo_token)}" placeholder="ey 开头的 Token" data-field="argo_token" style="flex:2;" /></div>
                 <button class="del-btn" data-type="${type}" data-idx="${idx}">✕</button>
             </div>
         `;
-    }
-
-    function bindDynamicSelects() {
-        document.querySelectorAll('.dynamic-select').forEach(sel => {
-            sel.removeEventListener('change', handleDynamicChange);
-            sel.addEventListener('change', handleDynamicChange);
-        });
-    }
-
-    function handleDynamicChange(e) {
-        syncDataFromDOM();
-        
-        const entryItem = e.target.closest('.entry-item');
-        if (entryItem) {
-            const type = entryItem.dataset.type;
-            const idx = parseInt(entryItem.dataset.idx, 10);
-            const item = entries[type][idx];
-            const map = moduleMap[type];
-            
-            if (map && item !== undefined) {
-                const activeEl = document.activeElement;
-                const fieldKey = activeEl ? activeEl.dataset.field : null;
-                
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = map.fn(item, idx, type);
-                const newEntryItem = tempDiv.firstElementChild;
-                
-                entryItem.parentNode.replaceChild(newEntryItem, entryItem);
-                bindDynamicSelects();
-                
-                if (fieldKey) {
-                    const target = newEntryItem.querySelector(`[data-field="${fieldKey}"]`);
-                    if (target) target.focus();
-                }
             }
-        }
-        generateCommands();
-    }
 
-    document.addEventListener('click', function(e) {
-        const target = e.target;
-        if (target.classList.contains('add-btn')) {
-            const type = target.dataset.type;
-            if (!type) return;
-            addEntry(type);
-            return;
-        }
-        if (target.classList.contains('del-btn')) {
-            const type = target.dataset.type;
-            const idx = parseInt(target.dataset.idx, 10);
-            if (type === undefined || isNaN(idx)) return;
-            removeEntry(type, idx);
-            return;
-        }
-    });
+            function bindDynamicSelects() {
+                document.querySelectorAll('.dynamic-select').forEach(sel => {
+                    sel.removeEventListener('change', handleDynamicChange);
+                    sel.addEventListener('change', handleDynamicChange);
+                });
+            }
 
-    function addEntry(type) {
-        let defaultItem = {};
-        switch(type) {
-            case 'cert': defaultItem = { domain: '', acme_mode: 2, web_port: '80' }; break;
-            case 'inbound': defaultItem = { inbound_type: 1, port: '0', uuid: '', reality_sni: '', cert_domain: '', ws_path: '', ss_method: 2, enable_hop: 'n', hop_start: '60000', hop_end: '65000' }; break;
-            case 'outbound': defaultItem = { outbound_type: 1, socks_server: '127.0.0.1', socks_port: '1080', socks_user: '', socks_pass: '', outbound_match: '{"ip_cidr":["0.0.0.0/0","::/0"]}' }; break;
-            case 'cf_dns': defaultItem = { domain: '', zone_id: '' }; break;
-            case 'cf_origin_rule': defaultItem = { domain: '', zone_id: '', ws_path: '', port: '' }; break;
-            case 'cf_argo': defaultItem = { domain: '', argo_token: '' }; break;
-            default: return;
-        }
-        entries[type].push(defaultItem);
-        renderModuleList(type);
-        generateCommands();
-    }
+            function handleDynamicChange(e) {
+                syncDataFromDOM();
 
-    function removeEntry(type, idx) {
-        entries[type].splice(idx, 1);
-        renderModuleList(type);
-        generateCommands();
-    }
+                const entryItem = e.target.closest('.entry-item');
+                if (entryItem) {
+                    const type = entryItem.dataset.type;
+                    const idx = parseInt(entryItem.dataset.idx, 10);
+                    const item = entries[type][idx];
+                    const map = moduleMap[type];
 
-    function syncDataFromDOM() {
-        document.querySelectorAll('.entry-item').forEach(el => {
-            const type = el.dataset.type;
-            const idx = parseInt(el.dataset.idx, 10);
-            if (!entries[type] || entries[type][idx] === undefined) return;
-            const item = entries[type][idx];
-            el.querySelectorAll('input, select').forEach(field => {
-                const key = field.dataset.field;
-                if (key) {
-                    item[key] = field.value;
+                    if (map && item !== undefined) {
+                        const activeEl = document.activeElement;
+                        const fieldKey = activeEl ? activeEl.dataset.field : null;
+
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = map.fn(item, idx, type);
+                        const newEntryItem = tempDiv.firstElementChild;
+
+                        entryItem.parentNode.replaceChild(newEntryItem, entryItem);
+                        bindDynamicSelects();
+
+                        if (fieldKey) {
+                            const target = newEntryItem.querySelector(`[data-field="${fieldKey}"]`);
+                            if (target) target.focus();
+                        }
+                    }
+                }
+                generateCommands();
+            }
+
+            document.addEventListener('click', function (e) {
+                const target = e.target;
+                if (target.classList.contains('add-btn')) {
+                    const type = target.dataset.type;
+                    if (!type) return;
+                    addEntry(type);
+                    return;
+                }
+                if (target.classList.contains('del-btn')) {
+                    const type = target.dataset.type;
+                    const idx = parseInt(target.dataset.idx, 10);
+                    if (type === undefined || isNaN(idx)) return;
+                    removeEntry(type, idx);
+                    return;
                 }
             });
-        });
-    }
 
-    function validateCert(item) { return item.domain && item.domain.trim() !== ''; }
-    function validateInbound(item) {
-        const proto = parseInt(item.inbound_type, 10);
-        if ([3,4,5].includes(proto)) {
-            if (!item.cert_domain || item.cert_domain.trim() === '') return false;
-        }
-        return true;
-    }
-    function validateOutbound(item) {
-        if (!item.outbound_type) return false;
-        if (!item.outbound_match || item.outbound_match.trim() === '') return false;
-        return true;
-    }
-    function validateCfDns(item) { return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== ''; }
-    function validateCfOriginRule(item) {
-        return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '' && item.ws_path && item.ws_path.trim() !== '' && item.port && item.port.trim() !== '';
-    }
-    function validateCfArgo(item) { return item.domain && item.domain.trim() !== '' && item.argo_token && item.argo_token.trim() !== ''; }
-
-    function isValidEntry(type, item) {
-        switch(type) {
-            case 'cert': return validateCert(item);
-            case 'inbound': return validateInbound(item);
-            case 'outbound': return validateOutbound(item);
-            case 'cf_dns': return validateCfDns(item);
-            case 'cf_origin_rule': return validateCfOriginRule(item);
-            case 'cf_argo': return validateCfArgo(item);
-            default: return false;
-        }
-    }
-
-    function hasAnyValidTask() {
-        for (const [type, items] of Object.entries(entries)) {
-            for (const item of items) {
-                if (isValidEntry(type, item)) return true;
+            function addEntry(type) {
+                let defaultItem = {};
+                switch (type) {
+                    case 'cert': defaultItem = { domain: '', acme_mode: 2, web_port: '80' }; break;
+                    case 'inbound': defaultItem = { inbound_type: 1, port: '0', uuid: '', reality_sni: '', cert_domain: '', ws_path: '', ss_method: 2, enable_hop: 'n', hop_start: '60000', hop_end: '65000' }; break;
+                    case 'outbound': defaultItem = { outbound_type: 1, socks_server: '127.0.0.1', socks_port: '1080', socks_user: '', socks_pass: '', outbound_match: '{"ip_cidr":["0.0.0.0/0","::/0"]}' }; break;
+                    case 'cf_dns': defaultItem = { domain: '', zone_id: '' }; break;
+                    case 'cf_origin_rule': defaultItem = { domain: '', zone_id: '', ws_path: '', port: '' }; break;
+                    case 'cf_argo': defaultItem = { tunnel_name: '', argo_token: '' }; break;
+                    default: return;
+                }
+                entries[type].push(defaultItem);
+                renderModuleList(type);
+                generateCommands();
             }
-        }
-        return false;
-    }
 
-    function generateCommands() {
-        syncDataFromDOM();
+            function removeEntry(type, idx) {
+                entries[type].splice(idx, 1);
+                renderModuleList(type);
+                generateCommands();
+            }
 
-        const cfKey = globalCfKey.value.trim();
-        const cfEmail = globalCfEmail.value.trim();
+            function syncDataFromDOM() {
+                document.querySelectorAll('.entry-item').forEach(el => {
+                    const type = el.dataset.type;
+                    const idx = parseInt(el.dataset.idx, 10);
+                    if (!entries[type] || entries[type][idx] === undefined) return;
+                    const item = entries[type][idx];
+                    el.querySelectorAll('input, select').forEach(field => {
+                        const key = field.dataset.field;
+                        if (key) {
+                            item[key] = field.value;
+                        }
+                    });
+                });
+            }
 
-        localStorage.setItem('xsb_entries', JSON.stringify(entries));
-        localStorage.setItem('xsb_cf_key', cfKey);
-        localStorage.setItem('xsb_cf_email', cfEmail);
-        localStorage.setItem('xsb_include_tune', includeTune.checked);
-        localStorage.setItem('xsb_include_install', includeInstall.checked);
+            function validateCert(item) { return item.domain && item.domain.trim() !== ''; }
+            function validateInbound(item) {
+                const proto = parseInt(item.inbound_type, 10);
+                if ([3, 4, 5].includes(proto)) {
+                    if (!item.cert_domain || item.cert_domain.trim() === '') return false;
+                }
+                return true;
+            }
+            function validateOutbound(item) {
+                if (!item.outbound_type) return false;
+                if (!item.outbound_match || item.outbound_match.trim() === '') return false;
+                return true;
+            }
+            function validateCfDns(item) { return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== ''; }
+            function validateCfOriginRule(item) {
+                return item.domain && item.domain.trim() !== '' && item.zone_id && item.zone_id.trim() !== '' && item.ws_path && item.ws_path.trim() !== '' && item.port && item.port.trim() !== '';
+            }
+            function validateCfArgo(item) { return item.tunnel_name && item.tunnel_name.trim() !== '' && item.argo_token && item.argo_token.trim() !== ''; }
 
-        let cmdType = 'curl';
-        cmdTypeRadios.forEach(r => { if (r.checked) cmdType = r.value; });
-        localStorage.setItem('xsb_cmd_type', cmdType);
-
-        const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
-        let allCommands = [];
-        const taskMap = {
-            cert: 'cert', inbound: 'inbound', outbound: 'outbound',
-            cf_dns: 'cf_dns', cf_origin_rule: 'cf_origin_rule', cf_argo: 'cf_argo'
-        };
-
-        const needCf = (type, item) => {
-            if (type === 'cert' && parseInt(item.acme_mode,10) === 2) return true;
-            if (type === 'cf_dns' || type === 'cf_origin_rule' || type === 'cf_argo') return true;
-            return false;
-        };
-
-        let hasMissingCf = false;
-        for (const [type, items] of Object.entries(entries)) {
-            for (const item of items) {
-                if (needCf(type, item) && (!cfKey || !cfEmail)) {
-                    hasMissingCf = true;
-                    break;
+            function isValidEntry(type, item) {
+                switch (type) {
+                    case 'cert': return validateCert(item);
+                    case 'inbound': return validateInbound(item);
+                    case 'outbound': return validateOutbound(item);
+                    case 'cf_dns': return validateCfDns(item);
+                    case 'cf_origin_rule': return validateCfOriginRule(item);
+                    case 'cf_argo': return validateCfArgo(item);
+                    default: return false;
                 }
             }
-            if (hasMissingCf) break;
-        }
 
-        if (hasMissingCf) {
-            outputCmd.value = '⚠️ 检测到需要 Cloudflare 凭证的任务，请填写 CF_Key 和 CF_Email。';
-            singleCmdList.innerHTML = '<div style="color:var(--err); font-size:13px; text-align:center; padding:10px;">⚠️ 请先填写 Cloudflare 凭证</div>';
-            return;
-        }
-
-        const hasTask = hasAnyValidTask();
-
-        if (hasTask && includeInstall.checked) {
-            allCommands.push(`# install (安装依赖和 Sing-box)\nXSB_TASKS="install" bash <(${fetchCmd})`);
-        }
-
-        for (const [type, items] of Object.entries(entries)) {
-            const task = taskMap[type];
-            if (!task || items.length === 0) continue;
-
-            const validItems = items.filter((item) => isValidEntry(type, item));
-
-            validItems.forEach((item, idx) => {
-                let vars = {};
-                switch(type) {
-                    case 'cert': {
-                        if (item.domain) vars.DOMAIN = item.domain;
-                        if (item.acme_mode) vars.ACME_MODE = item.acme_mode;
-                        if (parseInt(item.acme_mode,10) === 1 && item.web_port) vars.WEB_PORT = item.web_port;
-                        if (parseInt(item.acme_mode,10) === 2) { vars.CF_Key = cfKey; vars.CF_Email = cfEmail; }
-                        break;
+            function hasAnyValidTask() {
+                for (const [type, items] of Object.entries(entries)) {
+                    for (const item of items) {
+                        if (isValidEntry(type, item)) return true;
                     }
-                    case 'inbound': {
-                        const proto = parseInt(item.inbound_type, 10);
-                        vars.INBOUND_TYPE = proto;
-                        if (item.port && item.port.trim() !== '') vars.PORT = item.port;
+                }
+                return false;
+            }
 
-                        switch(proto) {
-                            case 1:
-                            case 2:
-                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.reality_sni && item.reality_sni.trim() !== '') vars.REALITY_SERVER_NAME = item.reality_sni;
+            function generateCommands() {
+                syncDataFromDOM();
+
+                const cfKey = globalCfKey.value.trim();
+                const cfEmail = globalCfEmail.value.trim();
+
+                localStorage.setItem('xsb_entries', JSON.stringify(entries));
+                localStorage.setItem('xsb_cf_key', cfKey);
+                localStorage.setItem('xsb_cf_email', cfEmail);
+                localStorage.setItem('xsb_include_tune', includeTune.checked);
+                localStorage.setItem('xsb_include_install', includeInstall.checked);
+
+                let cmdType = 'curl';
+                cmdTypeRadios.forEach(r => { if (r.checked) cmdType = r.value; });
+                localStorage.setItem('xsb_cmd_type', cmdType);
+
+                const fetchCmd = (cmdType === 'curl') ? `curl -Ls ${SCRIPT_URL}` : `wget -qO- ${SCRIPT_URL}`;
+                let allCommands = [];
+                const taskMap = {
+                    cert: 'cert', inbound: 'inbound', outbound: 'outbound',
+                    cf_dns: 'cf_dns', cf_origin_rule: 'cf_origin_rule', cf_argo: 'cf_argo'
+                };
+
+                const needCf = (type, item) => {
+                    if (type === 'cert' && parseInt(item.acme_mode, 10) === 2) return true;
+                    if (type === 'cf_dns' || type === 'cf_origin_rule') return true;
+                    return false;
+                };
+
+                let hasMissingCf = false;
+                for (const [type, items] of Object.entries(entries)) {
+                    for (const item of items) {
+                        if (needCf(type, item) && (!cfKey || !cfEmail)) {
+                            hasMissingCf = true;
+                            break;
+                        }
+                    }
+                    if (hasMissingCf) break;
+                }
+
+                if (hasMissingCf) {
+                    outputCmd.value = '⚠️ 检测到需要 Cloudflare 凭证的任务，请填写 CF_Key 和 CF_Email。';
+                    singleCmdList.innerHTML = '<div style="color:var(--err); font-size:13px; text-align:center; padding:10px;">⚠️ 请先填写 Cloudflare 凭证</div>';
+                    return;
+                }
+
+                const hasTask = hasAnyValidTask();
+
+                if (hasTask && includeInstall.checked) {
+                    allCommands.push(`# install (安装依赖和 Sing-box)\nXSB_TASKS="install" bash <(${fetchCmd})`);
+                }
+
+                for (const [type, items] of Object.entries(entries)) {
+                    const task = taskMap[type];
+                    if (!task || items.length === 0) continue;
+
+                    const validItems = items.filter((item) => isValidEntry(type, item));
+
+                    validItems.forEach((item, idx) => {
+                        let vars = {};
+                        switch (type) {
+                            case 'cert': {
+                                if (item.domain) vars.DOMAIN = item.domain;
+                                if (item.acme_mode) vars.ACME_MODE = item.acme_mode;
+                                if (parseInt(item.acme_mode, 10) === 1 && item.web_port) vars.WEB_PORT = item.web_port;
+                                if (parseInt(item.acme_mode, 10) === 2) { vars.CF_Key = cfKey; vars.CF_Email = cfEmail; }
                                 break;
-                            case 3:
-                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
-                                break;
-                            case 4:
-                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
-                                if (item.enable_hop) vars.ENABLE_HOP = item.enable_hop;
-                                if (item.enable_hop === 'y') {
-                                    if (item.hop_start && item.hop_start.trim() !== '') vars.HY2_HOP_START = item.hop_start;
-                                    if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END = item.hop_end;
+                            }
+                            case 'inbound': {
+                                const proto = parseInt(item.inbound_type, 10);
+                                vars.INBOUND_TYPE = proto;
+                                if (item.port && item.port.trim() !== '') vars.PORT = item.port;
+
+                                switch (proto) {
+                                    case 1:
+                                    case 2:
+                                        if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                        if (item.reality_sni && item.reality_sni.trim() !== '') vars.REALITY_SERVER_NAME = item.reality_sni;
+                                        break;
+                                    case 3:
+                                        if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                        if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                        break;
+                                    case 4:
+                                        if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                        if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                        if (item.enable_hop) vars.ENABLE_HOP = item.enable_hop;
+                                        if (item.enable_hop === 'y') {
+                                            if (item.hop_start && item.hop_start.trim() !== '') vars.HY2_HOP_START = item.hop_start;
+                                            if (item.hop_end && item.hop_end.trim() !== '') vars.HY2_HOP_END = item.hop_end;
+                                        }
+                                        break;
+                                    case 5:
+                                        if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
+                                        if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
+                                        if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item.ws_path;
+                                        break;
+                                    case 6:
+                                        if (item.ss_method) vars.METHOD = item.ss_method;
+                                        if (item.uuid && item.uuid.trim() !== '') vars.PASSWORD = item.uuid;
+                                        break;
                                 }
                                 break;
-                            case 5:
-                                if (item.uuid && item.uuid.trim() !== '') vars.UUID = item.uuid;
-                                if (item.cert_domain) vars.CERT_DOMAIN = item.cert_domain;
-                                if (item.ws_path && item.ws_path.trim() !== '') vars.WS_PATH = item.ws_path;
+                            }
+                            case 'outbound': {
+                                const obType = parseInt(item.outbound_type, 10);
+                                vars.OUTBOUND_TYPE = obType;
+                                if (item.outbound_match) vars.OUTBOUND_MATCH = item.outbound_match;
+                                if (obType === 1) {
+                                    if (item.socks_server && item.socks_server.trim() !== '') vars.SOCKS5_SERVER = item.socks_server;
+                                    if (item.socks_port && item.socks_port.trim() !== '') vars.SOCKS5_PORT = item.socks_port;
+                                    if (item.socks_user && item.socks_user.trim() !== '') vars.SOCKS5_USER = item.socks_user;
+                                    if (item.socks_pass && item.socks_pass.trim() !== '') vars.SOCKS5_PASS = item.socks_pass;
+                                }
                                 break;
-                            case 6:
-                                if (item.ss_method) vars.METHOD = item.ss_method;
-                                if (item.uuid && item.uuid.trim() !== '') vars.PASSWORD = item.uuid;
+                            }
+                            case 'cf_dns': {
+                                if (item.domain) vars.DOMAIN = item.domain;
+                                if (item.zone_id) vars.ZONE_ID = item.zone_id;
+                                vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
                                 break;
+                            }
+                            case 'cf_origin_rule': {
+                                if (item.domain) vars.DOMAIN = item.domain;
+                                if (item.zone_id) vars.ZONE_ID = item.zone_id;
+                                if (item.ws_path) vars.WS_PATH = item.ws_path;
+                                if (item.port) vars.PORT = item.port;
+                                vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
+                                break;
+                            }
+                            case 'cf_argo': {
+                                if (item.tunnel_name) vars.TUNNEL_NAME = item.tunnel_name;
+                                if (item.argo_token) vars.ARGO_TOKEN = item.argo_token;
+                                break;
+                            }
                         }
-                        break;
-                    }
-                    case 'outbound': {
-                        const obType = parseInt(item.outbound_type, 10);
-                        vars.OUTBOUND_TYPE = obType;
-                        if (item.outbound_match) vars.OUTBOUND_MATCH = item.outbound_match;
-                        if (obType === 1) {
-                            if (item.socks_server && item.socks_server.trim() !== '') vars.SOCKS5_SERVER = item.socks_server;
-                            if (item.socks_port && item.socks_port.trim() !== '') vars.SOCKS5_PORT = item.socks_port;
-                            if (item.socks_user && item.socks_user.trim() !== '') vars.SOCKS5_USER = item.socks_user;
-                            if (item.socks_pass && item.socks_pass.trim() !== '') vars.SOCKS5_PASS = item.socks_pass;
+                        const varParts = [];
+                        for (const [k, v] of Object.entries(vars)) {
+                            if (v !== undefined && v !== '') {
+                                const escaped = String(v)
+                                    .replace(/\\/g, '\\\\')
+                                    .replace(/"/g, '\\"')
+                                    .replace(/\$/g, '\\$')
+                                    .replace(/`/g, '\\`');
+                                varParts.push(`${k}="${escaped}"`);
+                            }
                         }
-                        break;
-                    }
-                    case 'cf_dns': {
-                        if (item.domain) vars.DOMAIN = item.domain;
-                        if (item.zone_id) vars.ZONE_ID = item.zone_id;
-                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
-                        break;
-                    }
-                    case 'cf_origin_rule': {
-                        if (item.domain) vars.DOMAIN = item.domain;
-                        if (item.zone_id) vars.ZONE_ID = item.zone_id;
-                        if (item.ws_path) vars.WS_PATH = item.ws_path;
-                        if (item.port) vars.PORT = item.port;
-                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
-                        break;
-                    }
-                    case 'cf_argo': {
-                        if (item.domain) vars.DOMAIN = item.domain;
-                        if (item.argo_token) vars.ARGO_TOKEN = item.argo_token;
-                        vars.CF_Key = cfKey; vars.CF_Email = cfEmail;
-                        break;
-                    }
+                        if (varParts.length === 0) return;
+                        const varStr = varParts.join(' ');
+                        const cmd = `XSB_TASKS="${task}" ${varStr} bash <(${fetchCmd})`;
+                        const comment = `# ${type} #${idx + 1}`;
+                        allCommands.push(`${comment}\n${cmd}`);
+                    });
                 }
-                const varParts = [];
-                for (const [k, v] of Object.entries(vars)) {
-                    if (v !== undefined && v !== '') {
-                        const escaped = String(v)
-                            .replace(/\\/g, '\\\\')
-                            .replace(/"/g, '\\"')
-                            .replace(/\$/g, '\\$')
-                            .replace(/`/g, '\\`');
-                        varParts.push(`${k}="${escaped}"`);
-                    }
+
+                if (includeTune.checked) {
+                    allCommands.push(`# tune (TCP 智能调优)\nXSB_TASKS="tune" bash <(${fetchCmd})`);
                 }
-                if (varParts.length === 0) return;
-                const varStr = varParts.join(' ');
-                const cmd = `XSB_TASKS="${task}" ${varStr} bash <(${fetchCmd})`;
-                const comment = `# ${type} #${idx+1}`;
-                allCommands.push(`${comment}\n${cmd}`);
-            });
-        }
 
-        if (includeTune.checked && hasTask) {
-            allCommands.push(`# tune (TCP 智能调优)\nXSB_TASKS="tune" bash <(${fetchCmd})`);
-        }
+                if (allCommands.length === 0) {
+                    outputCmd.value = '⚠️ 没有有效的配置条目，请确保必填字段均已填写。';
+                    singleCmdList.innerHTML = '<div style="color:var(--sub); font-size:13px; text-align:center; padding:10px;">暂无有效命令</div>';
+                    return;
+                }
 
-        if (allCommands.length === 0) {
-            outputCmd.value = '⚠️ 没有有效的配置条目，请确保必填字段均已填写。';
-            singleCmdList.innerHTML = '<div style="color:var(--sub); font-size:13px; text-align:center; padding:10px;">暂无有效命令</div>';
-            return;
-        }
+                outputCmd.value = allCommands.join('\n\n');
 
-        outputCmd.value = allCommands.join('\n\n');
+                singleCmdList.innerHTML = allCommands.map(fullCmd => {
+                    const lines = fullCmd.split('\n');
+                    const comment = lines[0] || '';
+                    const code = lines.slice(1).join('\n') || '';
+                    const safeCode = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-        singleCmdList.innerHTML = allCommands.map(fullCmd => {
-            const lines = fullCmd.split('\n');
-            const comment = lines[0] || '';
-            const code = lines.slice(1).join('\n') || '';
-            const safeCode = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            
-            return `
+                    return `
                 <div class="single-cmd-item">
                     <div class="single-cmd-header">
                         <span class="single-cmd-title">${escHtml(comment)}</span>
@@ -1079,125 +1216,126 @@ footer a:hover { color: var(--acc); }
                     <div class="single-cmd-body">${escHtml(code)}</div>
                 </div>
             `;
-        }).join('');
-    }
+                }).join('');
+            }
 
-    function copyAll() {
-        const text = outputCmd.value;
-        if (!text || text.startsWith('⚠️')) {
-            copyFeedback.textContent = '⚠️ 无有效命令';
-            copyFeedback.style.color = 'var(--err)';
-            copyFeedback.classList.add('show');
-            setTimeout(() => copyFeedback.classList.remove('show'), 2000);
-            return;
-        }
-        navigator.clipboard.writeText(text).then(() => {
-            copyFeedback.textContent = '✅ 已复制到剪贴板';
-            copyFeedback.style.color = 'var(--ok)';
-            copyFeedback.classList.add('show');
-            setTimeout(() => copyFeedback.classList.remove('show'), 2500);
-        }).catch(() => {
-            outputCmd.select();
-            document.execCommand('copy');
-            copyFeedback.textContent = '✅ 已复制到剪贴板';
-            copyFeedback.style.color = 'var(--ok)';
-            copyFeedback.classList.add('show');
-            setTimeout(() => copyFeedback.classList.remove('show'), 2500);
-        });
-    }
+            function copyAll() {
+                const text = outputCmd.value;
+                if (!text || text.startsWith('⚠️')) {
+                    copyFeedback.textContent = '⚠️ 无有效命令';
+                    copyFeedback.style.color = 'var(--err)';
+                    copyFeedback.classList.add('show');
+                    setTimeout(() => copyFeedback.classList.remove('show'), 2000);
+                    return;
+                }
+                navigator.clipboard.writeText(text).then(() => {
+                    copyFeedback.textContent = '✅ 已复制到剪贴板';
+                    copyFeedback.style.color = 'var(--ok)';
+                    copyFeedback.classList.add('show');
+                    setTimeout(() => copyFeedback.classList.remove('show'), 2500);
+                }).catch(() => {
+                    outputCmd.select();
+                    document.execCommand('copy');
+                    copyFeedback.textContent = '✅ 已复制到剪贴板';
+                    copyFeedback.style.color = 'var(--ok)';
+                    copyFeedback.classList.add('show');
+                    setTimeout(() => copyFeedback.classList.remove('show'), 2500);
+                });
+            }
 
-    function resetAll() {
-        if (!confirm('清空所有已添加的条目并清除缓存？')) return;
-        entries = { cert: [], inbound: [], outbound: [], cf_dns: [], cf_origin_rule: [], cf_argo: [] };
-        globalCfKey.value = '';
-        globalCfEmail.value = '';
-        localStorage.removeItem('xsb_entries');
-        localStorage.removeItem('xsb_cf_key');
-        localStorage.removeItem('xsb_cf_email');
-        renderAll();
-        generateCommands();
-    }
+            function resetAll() {
+                if (!confirm('清空所有已添加的条目并清除缓存？')) return;
+                entries = { cert: [], inbound: [], outbound: [], cf_dns: [], cf_origin_rule: [], cf_argo: [] };
+                globalCfKey.value = '';
+                globalCfEmail.value = '';
+                localStorage.removeItem('xsb_entries');
+                localStorage.removeItem('xsb_cf_key');
+                localStorage.removeItem('xsb_cf_email');
+                renderAll();
+                generateCommands();
+            }
 
-    btnCopy.addEventListener('click', copyAll);
-    btnReset.addEventListener('click', resetAll);
-    includeTune.addEventListener('change', generateCommands);
-    includeInstall.addEventListener('change', generateCommands);
+            btnCopy.addEventListener('click', copyAll);
+            btnReset.addEventListener('click', resetAll);
+            includeTune.addEventListener('change', generateCommands);
+            includeInstall.addEventListener('change', generateCommands);
 
-    singleCmdList.addEventListener('click', function(e) {
-        const btn = e.target.closest('.single-copy-btn');
-        if (!btn) return;
-        const textToCopy = btn.dataset.clipboard;
-        if (!textToCopy) return;
+            singleCmdList.addEventListener('click', function (e) {
+                const btn = e.target.closest('.single-copy-btn');
+                if (!btn) return;
+                const textToCopy = btn.dataset.clipboard;
+                if (!textToCopy) return;
 
-        const performCopy = () => {
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '✅ 已复制';
-            btn.style.color = 'var(--ok)';
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.style.color = 'var(--acc)';
-            }, 1500);
-        };
+                const performCopy = () => {
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '✅ 已复制';
+                    btn.style.color = 'var(--ok)';
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.color = 'var(--acc)';
+                    }, 1500);
+                };
 
-        navigator.clipboard.writeText(textToCopy).then(performCopy).catch(() => {
-            const textarea = document.createElement('textarea');
-            textarea.value = textToCopy;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            performCopy();
-        });
-    });
+                navigator.clipboard.writeText(textToCopy).then(performCopy).catch(() => {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    performCopy();
+                });
+            });
 
-    let timer;
-    document.addEventListener('input', function(e) {
-        if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
-            clearTimeout(timer);
-            timer = setTimeout(generateCommands, 400);
-        }
-    });
-    document.addEventListener('change', function(e) {
-        if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
-            clearTimeout(timer);
-            timer = setTimeout(generateCommands, 400);
-        }
-    });
+            let timer;
+            document.addEventListener('input', function (e) {
+                if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
+                    clearTimeout(timer);
+                    timer = setTimeout(generateCommands, 400);
+                }
+            });
+            document.addEventListener('change', function (e) {
+                if (e.target.closest('.entry-item') || e.target.closest('.global-row')) {
+                    clearTimeout(timer);
+                    timer = setTimeout(generateCommands, 400);
+                }
+            });
 
-    cmdTypeRadios.forEach(r => r.addEventListener('change', generateCommands));
+            cmdTypeRadios.forEach(r => r.addEventListener('change', generateCommands));
 
-    function init() {
-        initTheme();
+            function init() {
+                initTheme();
 
-        const savedEntries = localStorage.getItem('xsb_entries');
-        if (savedEntries) {
-            try { entries = JSON.parse(savedEntries); } catch(e) { console.error('解析缓存失败:', e); }
-        }
-        globalCfKey.value = localStorage.getItem('xsb_cf_key') || '';
-        globalCfEmail.value = localStorage.getItem('xsb_cf_email') || '';
-        
-        if (localStorage.getItem('xsb_include_tune') !== null) {
-            includeTune.checked = localStorage.getItem('xsb_include_tune') === 'true';
-        }
-        if (localStorage.getItem('xsb_include_install') !== null) {
-            includeInstall.checked = localStorage.getItem('xsb_include_install') === 'true';
-        }
-        const savedCmdType = localStorage.getItem('xsb_cmd_type');
-        if (savedCmdType) {
-            cmdTypeRadios.forEach(r => { r.checked = (r.value === savedCmdType); });
-        }
+                const savedEntries = localStorage.getItem('xsb_entries');
+                if (savedEntries) {
+                    try { entries = JSON.parse(savedEntries); } catch (e) { console.error('解析缓存失败:', e); }
+                }
+                globalCfKey.value = localStorage.getItem('xsb_cf_key') || '';
+                globalCfEmail.value = localStorage.getItem('xsb_cf_email') || '';
 
-        renderAll();
-        generateCommands();
-    }
+                if (localStorage.getItem('xsb_include_tune') !== null) {
+                    includeTune.checked = localStorage.getItem('xsb_include_tune') === 'true';
+                }
+                if (localStorage.getItem('xsb_include_install') !== null) {
+                    includeInstall.checked = localStorage.getItem('xsb_include_install') === 'true';
+                }
+                const savedCmdType = localStorage.getItem('xsb_cmd_type');
+                if (savedCmdType) {
+                    cmdTypeRadios.forEach(r => { r.checked = (r.value === savedCmdType); });
+                }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+                renderAll();
+                generateCommands();
+            }
 
-})();
-</script>
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+
+        })();
+    </script>
 </body>
+
 </html>
