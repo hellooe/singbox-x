@@ -375,18 +375,51 @@ install_brutal() {
 }
 
 setup_hy2_hop() {
-    local hy2_port=$1 hop_start=$2 hop_end=$3 tag=$4
+    local hy2_port="$1" hop_start="$2" hop_end="$3" tag="$4"
+
+    if [[ -z "$hy2_port" || -z "$hop_start" || -z "$hop_end" || -z "$tag" ]]; then
+        echo -e "${RED}错误：配置端口跳跃参数不完整！${PLAIN}"
+        return 1
+    fi
+
+    cleanup_hy2_hop "$tag" false
+
     echo -e "${GREEN}配置 Hysteria2 端口跳跃 (${hop_start}-${hop_end}) -> ${hy2_port}${PLAIN}"
-    iptables -t nat -A PREROUTING -p udp --dport ${hop_start}:${hop_end} -j REDIRECT --to-ports :${hy2_port} -m comment --comment "xsb_hy2_${tag}"
-    ip6tables -t nat -A PREROUTING -p udp --dport ${hop_start}:${hop_end} -j REDIRECT --to-ports :${hy2_port} -m comment --comment "xsb_hy2_${tag}"
+
+    iptables -t nat -A PREROUTING -p udp --dport "${hop_start}:${hop_end}" -j REDIRECT --to-ports "${hy2_port}" -m comment --comment "xsb_hy2_${tag}"
+
+    if ip6tables -t nat -L PREROUTING -n &>/dev/null; then
+        ip6tables -t nat -A PREROUTING -p udp --dport "${hop_start}:${hop_end}" -j REDIRECT --to-ports "${hy2_port}" -m comment --comment "xsb_hy2_${tag}"
+    fi
+    
     persist_iptables
 }
 
 cleanup_hy2_hop() {
-    local tag=$1
-    iptables -t nat -D PREROUTING -p udp -m comment --comment "xsb_hy2_${tag}" -j REDIRECT 2>/dev/null
-    ip6tables -t nat -D PREROUTING -p udp -m comment --comment "xsb_hy2_${tag}" -j REDIRECT 2>/dev/null
-    persist_iptables
+    local tag="$1"
+    local do_persist="${2:-true}"
+
+    if [[ -z "$tag" ]]; then
+        echo -e "${RED}错误：清理规则缺少 tag 参数！${PLAIN}"
+        return 1
+    fi
+
+    local comment="xsb_hy2_${tag}"
+    local line_num
+
+    while line_num=$(iptables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep "$comment" | tail -n1 | awk '{print $1}') && [[ -n "$line_num" ]]; do
+        iptables -t nat -D PREROUTING "$line_num"
+    done
+
+    if ip6tables -t nat -L PREROUTING -n &>/dev/null; then
+        while line_num=$(ip6tables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep "$comment" | tail -n1 | awk '{print $1}') && [[ -n "$line_num" ]]; do
+            ip6tables -t nat -D PREROUTING "$line_num"
+        done
+    fi
+
+    if [[ "$do_persist" == "true" ]]; then
+        persist_iptables
+    fi
 }
 
 persist_iptables() {
