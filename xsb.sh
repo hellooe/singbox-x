@@ -682,12 +682,12 @@ vm.min_free_kbytes = 65536
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 net.core.netdev_max_backlog = 25000
-net.core.rmem_default = 4194304
-net.core.wmem_default = 4194304
+net.core.rmem_default = 524288
+net.core.wmem_default = 524288
 net.core.rmem_max = ${BUFFER_BYTES}
 net.core.wmem_max = ${BUFFER_BYTES}
-net.ipv4.tcp_rmem = 4096 4194304 ${BUFFER_BYTES}
-net.ipv4.tcp_wmem = 4096 4194304 ${BUFFER_BYTES}
+net.ipv4.tcp_rmem = 4096 524288 ${BUFFER_BYTES}
+net.ipv4.tcp_wmem = 4096 524288 ${BUFFER_BYTES}
 net.ipv4.tcp_keepalive_time = 300
 net.ipv4.tcp_keepalive_intvl = 15
 net.ipv4.tcp_keepalive_probes = 3
@@ -710,7 +710,6 @@ net.ipv4.tcp_timestamps = 1
 net.ipv4.tcp_recovery = 1
 net.ipv4.tcp_reordering = 5
 net.ipv4.tcp_early_retrans = 3
-net.ipv4.tcp_limit_output_bytes = 4194304
 EOF
     sysctl -p /etc/sysctl.d/99-tcp.conf
     echo -e "${GREEN}TCP 调优完成 (缓冲区 ${BUFFER_MB}MB)${PLAIN}"
